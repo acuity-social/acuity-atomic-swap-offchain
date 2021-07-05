@@ -18,6 +18,7 @@ version = "0.1.0"
 dependencies = [
  "rocksdb",
  "substrate-api-client",
+ "tokio 1.8.0",
  "tokio-tungstenite",
  "web3",
 ]
