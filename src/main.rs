@@ -16,8 +16,11 @@ async fn main() {
     let _db = DB::open_default(path).unwrap();
 
     let client = ClientBuilder::<DefaultNodeRuntime>::new()
-        .register_type_size::<[u8; 32]>("[u8; 32]")
-        .register_type_size::<[u8; 16]>("[u8; 16]")
+        .register_type_size::<[u8; 16]>("AcuityOrderId")
+        .register_type_size::<[u8; 16]>("AcuityAssetId")
+        .register_type_size::<[u8; 32]>("AcuityForeignAddress")
+        .register_type_size::<[u8; 32]>("AcuityHashedSecret")
+        .register_type_size::<[u8; 32]>("AcuitySecret")
         .register_type_size::<u64>("Timestamp")
         .register_type_size::<[u8; 20]>("EthereumAddress")
         .set_url("ws://127.0.0.1:9946").build().await.unwrap();
