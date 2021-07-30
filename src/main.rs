@@ -4,11 +4,47 @@ use substrate_subxt::{
     balances::{
         TransferEvent,
     },
-    sp_core::Decode,
     ClientBuilder,
     DefaultNodeRuntime,
     EventSubscription,
+    system::System,
+    sp_runtime::traits::{
+        AtLeast32Bit,
+        MaybeSerialize,
+        Member,
+    },
 };
+use std::fmt::Debug;
+
+
+use codec::{
+    Codec,
+    Decode,
+};
+
+use proc_macro::*;
+
+#[module]
+pub trait AtomicSwap: System {
+    type Balance: Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerialize
+        + Debug
+        + From<<Self as System>::BlockNumber>;
+}
+
+/// AddToOrder event.
+#[derive(Debug, Decode, Eq, Event, PartialEq)]
+pub struct AddToOrderEvent<T: AtomicSwap> {
+    pub seller: <T as System>::AccountId,
+    pub asset_id: [u8; 16],
+    pub price: u128,
+    pub foreign_address: [u8; 32],
+    pub value: T::Balance,
+}
 
 #[tokio::main]
 async fn main() {

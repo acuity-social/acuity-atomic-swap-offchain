@@ -5,6 +5,8 @@ edition = "2018"
 
 [dependencies]
 substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", branch = "aj-deps" }
+proc-macro = { git = "https://github.com/paritytech/substrate-subxt", branch = "aj-deps", package = "substrate-subxt-proc-macro"}
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 web3 = "0.16.0"
 rocksdb = "0.16.0"
 tokio-tungstenite = "*"
