@@ -11,3 +11,5 @@ web3 = "0.16.0"
 rocksdb = "0.16.0"
 tokio-tungstenite = "*"
 tokio = { version = "1.0", features = ["full"] }
+sp-core = { package = "sp-core", git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-runtime = { package = "sp-runtime", git = "https://github.com/paritytech/substrate", branch = "master" }
