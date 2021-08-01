@@ -1,4 +1,8 @@
 use rocksdb::DB;
+use tokio::net::{TcpListener, TcpStream};
+use std::{
+    net::SocketAddr,
+};
 use web3::futures::{future, StreamExt};
 use substrate_subxt::{
     balances::{
@@ -131,6 +135,9 @@ async fn main() {
     let path = "database";
     let _db = DB::open_default(path).unwrap();
 
+    // Spawn websockets task.
+    tokio::spawn(websockets_listen());
+
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
         .register_type_size::<[u8; 16]>("AcuityAssetId")
@@ -169,4 +176,27 @@ async fn main() {
             future::ready(())
         })
         .await;
+}
+
+async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
+    println!("Incoming TCP connection from: {}", addr);
+
+    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
+        .await
+        .expect("Error during the websocket handshake occurred");
+    println!("WebSocket connection established: {}", addr);
+}
+
+async fn websockets_listen() {
+    let addr = "127.0.0.1:8080".to_string();
+
+    // Create the event loop and TCP listener we'll accept connections on.
+    let try_socket = TcpListener::bind(&addr).await;
+    let listener = try_socket.expect("Failed to bind");
+    println!("Listening on: {}", addr);
+
+    // Let's spawn the handling of each connection in a separate task.
+    while let Ok((stream, addr)) = listener.accept().await {
+        tokio::spawn(handle_connection(stream, addr));
+    }
 }
