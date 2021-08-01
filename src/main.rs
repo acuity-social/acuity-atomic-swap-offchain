@@ -137,7 +137,24 @@ async fn main() {
 
     // Spawn websockets task.
     tokio::spawn(websockets_listen());
+    // Spawn Acuity task.
+    tokio::spawn(acuity_listen());
 
+    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
+    let web3 = web3::Web3::new(ws);
+    let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
+
+    println!("Got subscription id: {:?}", sub.id());
+
+    (&mut sub)
+        .for_each(|x| {
+            println!("Ethereum block: {:?}", x.unwrap().number.unwrap());
+            future::ready(())
+        })
+        .await;
+}
+
+async fn acuity_listen() {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
         .register_type_size::<[u8; 16]>("AcuityAssetId")
@@ -163,19 +180,6 @@ async fn main() {
     } else {
         println!("Failed to subscribe to Balances::Transfer Event");
     }
-
-    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
-    let web3 = web3::Web3::new(ws);
-    let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
-
-    println!("Got subscription id: {:?}", sub.id());
-
-    (&mut sub)
-        .for_each(|x| {
-            println!("Ethereum block: {:?}", x.unwrap().number.unwrap());
-            future::ready(())
-        })
-        .await;
 }
 
 async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
