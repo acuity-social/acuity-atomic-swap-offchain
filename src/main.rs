@@ -161,16 +161,18 @@ async fn acuity_listen() {
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);
     sub.filter_event::<AddToOrderEvent<_>>();
-    let raw = sub.next().await.unwrap().unwrap();
-    let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &raw.data[..]);
-    if let Ok(e) = event {
-        println!("Balance transfer success: seller: {:?}", e.seller);
-        println!("Balance transfer success: asset_id: {:?}", e.asset_id);
-        println!("Balance transfer success: price: {:?}", e.price);
-        println!("Balance transfer success: foreign_address: {:?}", e.foreign_address);
-        println!("Balance transfer success: value: {:?}", e.value);
-    } else {
-        println!("Failed to subscribe to Balances::Transfer Event");
+    loop {
+        let raw = sub.next().await.unwrap().unwrap();
+        let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &raw.data[..]);
+        if let Ok(e) = event {
+            println!("Balance transfer success: seller: {:?}", e.seller);
+            println!("Balance transfer success: asset_id: {:?}", e.asset_id);
+            println!("Balance transfer success: price: {:?}", e.price);
+            println!("Balance transfer success: foreign_address: {:?}", e.foreign_address);
+            println!("Balance transfer success: value: {:?}", e.value);
+        } else {
+            println!("Failed to subscribe to Balances::Transfer Event");
+        }
     }
 }
 
