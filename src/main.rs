@@ -1,5 +1,6 @@
 use rocksdb::DB;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::join;
 use std::{
     net::SocketAddr,
 };
@@ -136,22 +137,13 @@ async fn main() {
     let _db = DB::open_default(path).unwrap();
 
     // Spawn websockets task.
-    tokio::spawn(websockets_listen());
+    let websockets_task = tokio::spawn(websockets_listen());
     // Spawn Acuity task.
-    tokio::spawn(acuity_listen());
-
-    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
-    let web3 = web3::Web3::new(ws);
-    let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
-
-    println!("Got subscription id: {:?}", sub.id());
-
-    (&mut sub)
-        .for_each(|x| {
-            println!("Ethereum block: {:?}", x.unwrap().number.unwrap());
-            future::ready(())
-        })
-        .await;
+    let acuity_task = tokio::spawn(acuity_listen());
+    // Spawn Ethereum task.
+    let ethereum_task = tokio::spawn(ethereum_listen());
+    // Wait to exit.
+    let _result = join!(websockets_task, acuity_task, ethereum_task);
 }
 
 async fn acuity_listen() {
@@ -180,6 +172,21 @@ async fn acuity_listen() {
     } else {
         println!("Failed to subscribe to Balances::Transfer Event");
     }
+}
+
+async fn ethereum_listen() {
+    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
+    let web3 = web3::Web3::new(ws);
+    let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
+
+    println!("Got subscription id: {:?}", sub.id());
+
+    (&mut sub)
+        .for_each(|x| {
+            println!("Ethereum block: {:?}", x.unwrap().number.unwrap());
+            future::ready(())
+        })
+        .await;
 }
 
 async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
