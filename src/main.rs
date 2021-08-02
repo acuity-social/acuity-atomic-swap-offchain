@@ -105,6 +105,7 @@ impl Sudo for AcuityRuntime {}
 
 impl AtomicSwap for AcuityRuntime {
     type Balance = u128;
+    type Moment = u64;
 }
 
 
@@ -112,6 +113,14 @@ impl AtomicSwap for AcuityRuntime {
 #[module]
 pub trait AtomicSwap: System {
     type Balance: Member
+        + AtLeast32Bit
+        + Codec
+        + Default
+        + Copy
+        + MaybeSerialize
+        + Debug
+        + From<<Self as System>::BlockNumber>;
+    type Moment: Member
         + AtLeast32Bit
         + Codec
         + Default
@@ -129,6 +138,61 @@ pub struct AddToOrderEvent<T: AtomicSwap> {
     pub price: u128,
     pub foreign_address: [u8; 32],
     pub value: T::Balance,
+}
+
+/// RemoveFromOrder event.
+#[derive(Debug, Decode, Eq, Event, PartialEq)]
+pub struct RemoveFromOrderEvent<T: AtomicSwap> {
+    pub seller: <T as System>::AccountId,
+    pub asset_id: [u8; 16],
+    pub price: u128,
+    pub foreign_address: [u8; 32],
+    pub value: T::Balance,
+}
+
+/// LockSell event.
+#[derive(Debug, Decode, Eq, Event, PartialEq)]
+pub struct LockSellEvent<T: AtomicSwap> {
+    pub hashed_secret: [u8; 32],
+    pub order_id: [u8; 16],
+    pub value: T::Balance,
+    pub timeout: T::Moment,
+}
+
+/// UnlockSell event.
+#[derive(Debug, Decode, Eq, Event, PartialEq)]
+pub struct UnlockSellEvent<T: AtomicSwap> {
+    pub secret: [u8; 32],
+    pub buyer: <T as System>::AccountId,
+}
+
+/// TimeoutSell event.
+#[derive(Debug, Decode, Eq, PartialEq)]
+pub struct TimeoutSellEvent {
+    pub hashed_secret: [u8; 32],
+}
+
+/// LockBuy event.
+#[derive(Debug, Decode, Eq, Event, PartialEq)]
+pub struct LockBuyEvent<T: AtomicSwap> {
+    pub hashed_secret: [u8; 32],
+    pub asset_id: [u8; 16],
+    pub order_id: [u8; 16],
+    pub seller: <T as System>::AccountId,
+    pub value: T::Balance,
+    pub timeout: T::Moment,
+}
+
+/// UnlockBuy event.
+#[derive(Debug, Decode, Eq, PartialEq)]
+pub struct UnlockBuyEvent {
+    pub hashed_secret: [u8; 32],
+}
+
+/// TimeoutBuy event.
+#[derive(Debug, Decode, Eq, PartialEq)]
+pub struct TimeoutBuyEvent {
+    pub hashed_secret: [u8; 32],
 }
 
 #[tokio::main]
