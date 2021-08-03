@@ -221,6 +221,13 @@ async fn acuity_listen() {
         .register_type_size::<[u8; 20]>("EthereumAddress")
         .set_url("ws://127.0.0.1:9946").build().await.unwrap();
 
+    let mut blocks = client.subscribe_blocks().await.unwrap();
+
+    loop {
+        let block = blocks.next().await.unwrap();
+        println!("block: {:?}", block);
+    }
+/*
     let sub = client.subscribe_events().await.unwrap();
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);
@@ -236,6 +243,7 @@ async fn acuity_listen() {
             _ => println!("variant: {:?}", raw.variant),
         }
     }
+*/
 }
 
 async fn ethereum_listen() {
