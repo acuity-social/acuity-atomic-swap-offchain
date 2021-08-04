@@ -246,6 +246,34 @@ async fn acuity_listen() {
                             let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
                             println!("event: {:?}", event);
                         },
+                        "RemoveFromOrder" => {
+                            let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        "LockSell" => {
+                            let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        "UnlockSell" => {
+                            let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        "TimeoutSell" => {
+                            let event = TimeoutSellEvent::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        "LockBuy" => {
+                            let event = LockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        "UnlockBuy" => {
+                            let event = UnlockBuyEvent::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        "TimeoutBuy" => {
+                            let event = TimeoutBuyEvent::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
                         _ => println!("variant: {:?}", event.variant),
                     }
                 },
