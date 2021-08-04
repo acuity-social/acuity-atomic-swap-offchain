@@ -224,26 +224,35 @@ async fn acuity_listen() {
     let mut blocks = client.subscribe_blocks().await.unwrap();
 
     loop {
-        let block = blocks.next().await.unwrap();
-        println!("block: {:?}", block);
-    }
-/*
-    let sub = client.subscribe_events().await.unwrap();
-    let decoder = client.events_decoder();
-    let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);
-    loop {
-        let raw = sub.next().await.unwrap().unwrap();
-        if raw.module != "AtomicSwap" { continue; }
+        let block = blocks.next().await.unwrap().unwrap();
+        println!("Acuity block: {:?}", block.number);
+        let block = client.block_hash(Some(block.number.into())).await.unwrap().unwrap();
 
-        match raw.variant.as_str() {
-            "AddToOrder" => {
-                let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &raw.data[..]);
-                println!("event: {:?}", event);
-            },
-            _ => println!("variant: {:?}", raw.variant),
+        let sub = client.subscribe_events().await.unwrap();
+        let decoder = client.events_decoder();
+        let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);
+        sub.filter_block(block);
+
+        loop {
+            let raw = sub.next().await;
+            // Pattern match to retrieve the value
+            match raw {
+                Some(event) => {
+                    let event = event.unwrap();
+                    if event.module != "AtomicSwap" { continue; }
+
+                    match event.variant.as_str() {
+                        "AddToOrder" => {
+                            let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
+                            println!("event: {:?}", event);
+                        },
+                        _ => println!("variant: {:?}", event.variant),
+                    }
+                },
+                None    => break,
+            }
         }
     }
-*/
 }
 
 async fn ethereum_listen() {
