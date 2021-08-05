@@ -54,9 +54,12 @@ use sp_runtime::{
     OpaqueExtrinsic,
 };
 
+use sp_io::hashing::{blake2_128, keccak_256};
+
 use codec::{
     Codec,
     Decode,
+    Encode,
 };
 
 use proc_macro::*;
@@ -134,9 +137,9 @@ pub trait AtomicSwap: System {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct AddToOrderEvent<T: AtomicSwap> {
     pub seller: <T as System>::AccountId,
-    pub asset_id: [u8; 16],
+    pub asset_id: AssetId,
     pub price: u128,
-    pub foreign_address: [u8; 32],
+    pub foreign_address: ForeignAddress,
     pub value: T::Balance,
 }
 
@@ -144,9 +147,9 @@ pub struct AddToOrderEvent<T: AtomicSwap> {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct RemoveFromOrderEvent<T: AtomicSwap> {
     pub seller: <T as System>::AccountId,
-    pub asset_id: [u8; 16],
+    pub asset_id: AssetId,
     pub price: u128,
-    pub foreign_address: [u8; 32],
+    pub foreign_address: ForeignAddress,
     pub value: T::Balance,
 }
 
@@ -176,8 +179,8 @@ pub struct TimeoutSellEvent {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct LockBuyEvent<T: AtomicSwap> {
     pub hashed_secret: [u8; 32],
-    pub asset_id: [u8; 16],
-    pub order_id: [u8; 16],
+    pub asset_id: AssetId,
+    pub order_id: OrderId,
     pub seller: <T as System>::AccountId,
     pub value: T::Balance,
     pub timeout: T::Moment,
@@ -194,6 +197,32 @@ pub struct UnlockBuyEvent {
 pub struct TimeoutBuyEvent {
     pub hashed_secret: [u8; 32],
 }
+
+/// An Order Id (i.e. 16 bytes).
+///
+/// This gets serialized to the 0x-prefixed hex representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
+pub struct OrderId([u8; 16]);
+
+impl OrderId {
+    pub fn create<T: AtomicSwap>(seller: <T as System>::AccountId, asset_id: AssetId, price: u128, foreign_address: ForeignAddress) -> OrderId {
+        let mut order_id = OrderId::default();
+        order_id.0.copy_from_slice(&blake2_128(&[seller.encode(), asset_id.encode(), price.to_ne_bytes().to_vec(), foreign_address.encode()].concat()));
+        order_id
+    }
+}
+
+/// An Asset Id (i.e. 16 bytes).
+///
+/// This gets serialized to the 0x-prefixed hex representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
+pub struct AssetId([u8; 16]);
+
+/// A Foreign Address (i.e. 32 bytes).
+///
+/// This gets serialized to the 0x-prefixed hex representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
+pub struct ForeignAddress([u8; 32]);
 
 #[tokio::main]
 async fn main() {
@@ -243,36 +272,40 @@ async fn acuity_listen() {
 
                     match event.variant.as_str() {
                         "AddToOrder" => {
-                            let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                            println!("AddToOrderEvent: {:?}", event);
+                            let order_id = OrderId::create::<AcuityRuntime>(event.seller, event.asset_id, event.price, event.foreign_address);
+                            println!("order_id: {:?}", order_id);
                         },
                         "RemoveFromOrder" => {
-                            let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                            println!("RemoveFromOrderEvent: {:?}", event);
+                            let order_id = OrderId::create::<AcuityRuntime>(event.seller, event.asset_id, event.price, event.foreign_address);
+                            println!("order_id: {:?}", order_id);
                         },
                         "LockSell" => {
-                            let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                            println!("LockSellEvent: {:?}", event);
                         },
                         "UnlockSell" => {
-                            let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                            println!("UnlockSellEvent: {:?}", event);
                         },
                         "TimeoutSell" => {
-                            let event = TimeoutSellEvent::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = TimeoutSellEvent::decode(&mut &event.data[..]).unwrap();
+                            println!("TimeoutSellEvent: {:?}", event);
                         },
                         "LockBuy" => {
-                            let event = LockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = LockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                            println!("LockBuyEvent: {:?}", event);
                         },
                         "UnlockBuy" => {
-                            let event = UnlockBuyEvent::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = UnlockBuyEvent::decode(&mut &event.data[..]).unwrap();
+                            println!("UnlockBuyEvent: {:?}", event);
                         },
                         "TimeoutBuy" => {
-                            let event = TimeoutBuyEvent::decode(&mut &event.data[..]);
-                            println!("event: {:?}", event);
+                            let event = TimeoutBuyEvent::decode(&mut &event.data[..]).unwrap();
+                            println!("TimeoutBuyEvent: {:?}", event);
                         },
                         _ => println!("variant: {:?}", event.variant),
                     }

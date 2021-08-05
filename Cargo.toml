@@ -13,3 +13,4 @@ tokio-tungstenite = "*"
 tokio = { version = "1.0", features = ["full"] }
 sp-core = { package = "sp-core", git = "https://github.com/paritytech/substrate", branch = "master" }
 sp-runtime = { package = "sp-runtime", git = "https://github.com/paritytech/substrate", branch = "master" }
+sp-io = { package = "sp-io", git = "https://github.com/paritytech/substrate", branch = "master" }

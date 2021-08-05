@@ -19,6 +19,7 @@ dependencies = [
  "parity-scale-codec",
  "rocksdb",
  "sp-core",
+ "sp-io",
  "sp-runtime",
  "substrate-subxt",
  "substrate-subxt-proc-macro",
