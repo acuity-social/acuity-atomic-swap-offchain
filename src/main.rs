@@ -64,6 +64,9 @@ use codec::{
 
 use proc_macro::*;
 
+use serde::Serialize;
+use bincode;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AcuityRuntime;
 
@@ -198,48 +201,62 @@ pub struct TimeoutBuyEvent {
     pub hashed_secret: [u8; 32],
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize)]
+pub struct Order {
+    pub seller: Vec<u8>,
+    pub asset_id: AssetId,
+    pub price: u128,
+    pub foreign_address: ForeignAddress,
+}
+
+impl Order {
+    pub fn get_order_id(&self) -> OrderId {
+        let mut order_id = OrderId::default();
+        order_id.0.copy_from_slice(&blake2_128(&[self.seller.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat()));
+        order_id
+    }
+}
+
 /// An Order Id (i.e. 16 bytes).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
 pub struct OrderId([u8; 16]);
 
-impl OrderId {
-    pub fn create<T: AtomicSwap>(seller: <T as System>::AccountId, asset_id: AssetId, price: u128, foreign_address: ForeignAddress) -> OrderId {
-        let mut order_id = OrderId::default();
-        order_id.0.copy_from_slice(&blake2_128(&[seller.encode(), asset_id.encode(), price.to_ne_bytes().to_vec(), foreign_address.encode()].concat()));
-        order_id
+impl AsRef<[u8]> for OrderId {
+    fn as_ref(&self) -> &[u8] {
+		&self.0
     }
 }
 
 /// An Asset Id (i.e. 16 bytes).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Serialize)]
 pub struct AssetId([u8; 16]);
 
 /// A Foreign Address (i.e. 32 bytes).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Serialize)]
 pub struct ForeignAddress([u8; 32]);
 
 #[tokio::main]
 async fn main() {
     let path = "database";
-    let _db = DB::open_default(path).unwrap();
+    let db = DB::open_default(path).unwrap();
 
     // Spawn websockets task.
     let websockets_task = tokio::spawn(websockets_listen());
     // Spawn Acuity task.
-    let acuity_task = tokio::spawn(acuity_listen());
+    let acuity_task = tokio::spawn(acuity_listen(db));
     // Spawn Ethereum task.
     let ethereum_task = tokio::spawn(ethereum_listen());
     // Wait to exit.
     let _result = join!(websockets_task, acuity_task, ethereum_task);
 }
 
-async fn acuity_listen() {
+async fn acuity_listen(db: DB) {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
         .register_type_size::<[u8; 16]>("AcuityAssetId")
@@ -274,13 +291,26 @@ async fn acuity_listen() {
                         "AddToOrder" => {
                             let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("AddToOrderEvent: {:?}", event);
-                            let order_id = OrderId::create::<AcuityRuntime>(event.seller, event.asset_id, event.price, event.foreign_address);
+                            let order = Order {
+                                seller: event.seller.encode(),
+                                asset_id: event.asset_id,
+                                price: event.price,
+                                foreign_address: event.foreign_address,
+                            };
+                            let order_id = order.get_order_id();
                             println!("order_id: {:?}", order_id);
+                            db.put(order_id, bincode::serialize(&order).unwrap()).unwrap();
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("RemoveFromOrderEvent: {:?}", event);
-                            let order_id = OrderId::create::<AcuityRuntime>(event.seller, event.asset_id, event.price, event.foreign_address);
+                            let order = Order {
+                                seller: event.seller.encode(),
+                                asset_id: event.asset_id,
+                                price: event.price,
+                                foreign_address: event.foreign_address,
+                            };
+                            let order_id = order.get_order_id();
                             println!("order_id: {:?}", order_id);
                         },
                         "LockSell" => {
