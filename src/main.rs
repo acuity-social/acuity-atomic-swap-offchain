@@ -1,4 +1,4 @@
-use rocksdb::DB;
+use rocksdb::{DB, ColumnFamilyDescriptor, Options};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::join;
 use std::{
@@ -243,9 +243,13 @@ pub struct ForeignAddress([u8; 32]);
 
 #[tokio::main]
 async fn main() {
+    let mut db_opts = Options::default();
+    db_opts.create_missing_column_families(true);
     let path = "database";
-    let db = DB::open_default(path).unwrap();
-
+    let cf1 = ColumnFamilyDescriptor::new("order_static", Options::default());
+    let cf2 = ColumnFamilyDescriptor::new("order_value", Options::default());
+    let cf3 = ColumnFamilyDescriptor::new("order_list", Options::default());
+    let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3]).unwrap();
     // Spawn websockets task.
     let websockets_task = tokio::spawn(websockets_listen());
     // Spawn Acuity task.
@@ -299,7 +303,7 @@ async fn acuity_listen(db: DB) {
                             };
                             let order_id = order.get_order_id();
                             println!("order_id: {:?}", order_id);
-                            db.put(order_id, bincode::serialize(&order).unwrap()).unwrap();
+                            db.put_cf(db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
