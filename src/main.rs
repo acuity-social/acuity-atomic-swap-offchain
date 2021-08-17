@@ -27,7 +27,7 @@ use substrate_subxt::{
         System,
         SystemEventTypeRegistry,
     },
-    ClientBuilder,
+    ClientBuilder, Client,
     EventSubscription,
     sp_runtime::traits::{
         AtLeast32Bit,
@@ -40,6 +40,7 @@ use substrate_subxt::{
     },
     BasicSessionKeys,
     Runtime,
+    Error,
 };
 use std::fmt::Debug;
 
@@ -56,6 +57,9 @@ use sp_runtime::{
 
 use sp_io::hashing::{blake2_128, keccak_256};
 
+use sp_core::storage::{StorageData, StorageKey};
+use sp_core::{twox_128, Bytes, H256};
+
 use codec::{
     Codec,
     Decode,
@@ -66,8 +70,9 @@ use proc_macro::*;
 
 use serde::Serialize;
 use bincode;
+use hex;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct AcuityRuntime;
 
 impl Staking for AcuityRuntime {}
@@ -202,14 +207,14 @@ pub struct TimeoutBuyEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize)]
-pub struct Order {
-    pub seller: Vec<u8>,
+pub struct Order<T: AtomicSwap> {
+    pub seller: <T as System>::AccountId,
     pub asset_id: AssetId,
     pub price: u128,
     pub foreign_address: ForeignAddress,
 }
 
-impl Order {
+impl<T: AtomicSwap> Order<T> {
     pub fn get_order_id(&self) -> OrderId {
         let mut order_id = OrderId::default();
         order_id.0.copy_from_slice(&blake2_128(&[self.seller.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat()));
@@ -260,6 +265,62 @@ async fn main() {
     let _result = join!(websockets_task, acuity_task, ethereum_task);
 }
 
+struct AcuityApi {
+    client: Client::<AcuityRuntime>,
+}
+
+impl AcuityApi {
+
+    async fn get_storage_data(
+        &self,
+        module_name: &str,
+        storage_name: &str,
+        header_hash: H256,
+    ) -> Result<StorageData, &str> {
+        let mut storage_key = twox_128(module_name.as_bytes()).to_vec();
+        storage_key.extend(twox_128(storage_name.as_bytes()).to_vec());
+
+        let keys = vec![StorageKey(storage_key)];
+
+        let change_sets = self
+            .client
+            .query_storage(keys, header_hash, Some(header_hash))
+            .await.unwrap();
+        for change_set in change_sets {
+            for (_key, data) in change_set.changes {
+                if let Some(data) = data {
+                    return Ok(data);
+                }
+            }
+        }
+
+        Err("Data not found.")
+    }
+
+    async fn get_storage_data_map(
+        &self,
+        module_name: &str,
+        storage_name: &str,
+        key: &OrderId,
+    ) -> Result<u128, &str> {
+        let mut storage_key = twox_128(module_name.as_bytes()).to_vec();
+        storage_key.extend(twox_128(storage_name.as_bytes()).to_vec());
+        storage_key.extend(blake2_128(&key.encode()).to_vec());
+        storage_key.extend(key.encode());
+
+        let data = self
+        .client
+        .fetch_unhashed(StorageKey(storage_key), None)
+        .await.unwrap();
+
+        if let Some(data) = data {
+            return Ok(data);
+        }
+
+        Err("Data not found.")
+    }
+}
+
 async fn acuity_listen(db: DB) {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
@@ -295,21 +356,31 @@ async fn acuity_listen(db: DB) {
                         "AddToOrder" => {
                             let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("AddToOrderEvent: {:?}", event);
-                            let order = Order {
-                                seller: event.seller.encode(),
+                            let order = Order::<AcuityRuntime> {
+                                seller: event.seller,
                                 asset_id: event.asset_id,
                                 price: event.price,
                                 foreign_address: event.foreign_address,
                             };
                             let order_id = order.get_order_id();
-                            println!("order_id: {:?}", order_id);
+                            println!("order_id: {:?}", hex::encode(order_id));
                             db.put_cf(db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
+
+                            let value = db.get_cf(db.cf_handle("order_value").unwrap(), order_id).unwrap();
+                            println!("old value: {:?}", value);
+
+                            let api = AcuityApi {
+                                client: client.clone()
+                            };
+
+                            let new_value = api.get_storage_data_map("AtomicSwap", "AcuityOrderIdValues", &order_id).await;
+                            println!("new value: {:?}", new_value);
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("RemoveFromOrderEvent: {:?}", event);
-                            let order = Order {
-                                seller: event.seller.encode(),
+                            let order = Order::<AcuityRuntime> {
+                                seller: event.seller,
                                 asset_id: event.asset_id,
                                 price: event.price,
                                 foreign_address: event.foreign_address,
