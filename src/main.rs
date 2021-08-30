@@ -234,6 +234,33 @@ impl AsRef<[u8]> for OrderId {
     }
 }
 
+fn array_to_vec(arr: &[u8]) -> Vec<u8> {
+     let mut vector = Vec::new();
+     for i in arr.iter() {
+         vector.push(*i);
+     }
+     vector
+}
+
+fn vector_as_u8_16_array(vector: Vec<u8>) -> [u8;16] {
+    let mut arr = [0u8;16];
+    for i in 0..16 {
+        arr[i] = vector[i];
+    }
+    arr
+}
+
+struct ValueOrderId {
+    value: u128,
+    order_id: OrderId,
+}
+
+impl ValueOrderId {
+    fn serialize(&self) -> Vec<u8> {
+        [array_to_vec(&self.value.to_be_bytes()), self.order_id.0.to_vec()].concat()
+    }
+}
+
 /// An Asset Id (i.e. 16 bytes).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
@@ -366,15 +393,38 @@ async fn acuity_listen(db: DB) {
                             println!("order_id: {:?}", hex::encode(order_id));
                             db.put_cf(db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
 
-                            let value = db.get_cf(db.cf_handle("order_value").unwrap(), order_id).unwrap();
-                            println!("old value: {:?}", value);
+                            let option = db.get_cf(db.cf_handle("order_value").unwrap(), order_id).unwrap();
+
+                            match option {
+                                Some(result) => {
+                                    let value = u128::from_be_bytes(vector_as_u8_16_array(result));
+                                    println!("old value: {:?}", value);
+                                    let value_order_id = ValueOrderId {
+                                        value: value,
+                                        order_id: order_id,
+                                    };
+                                    // Remove order from list.
+                                    db.delete_cf(db.cf_handle("order_list").unwrap(), value_order_id.serialize()).unwrap();
+                                }
+                                None => {},
+                            }
 
                             let api = AcuityApi {
                                 client: client.clone()
                             };
 
-                            let new_value = api.get_storage_data_map("AtomicSwap", "AcuityOrderIdValues", &order_id).await;
+                            let new_value = api.get_storage_data_map("AtomicSwap", "AcuityOrderIdValues", &order_id).await.unwrap();
                             println!("new value: {:?}", new_value);
+
+                            // Add order back into list.
+                            let value_order_id = ValueOrderId {
+                                value: new_value,
+                                order_id: order_id,
+                            };
+                            db.put_cf(db.cf_handle("order_list").unwrap(), value_order_id.serialize(), order_id).unwrap();
+
+                            // Store new value
+                            db.put_cf(db.cf_handle("order_value").unwrap(), order_id, new_value.to_be_bytes()).unwrap();
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
