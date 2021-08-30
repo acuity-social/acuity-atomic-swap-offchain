@@ -3,8 +3,9 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::join;
 use std::{
     net::SocketAddr,
+    sync::Arc,
 };
-use web3::futures::{future, StreamExt};
+use web3::futures::{future, StreamExt, SinkExt};
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -40,7 +41,6 @@ use substrate_subxt::{
     },
     BasicSessionKeys,
     Runtime,
-    Error,
 };
 use std::fmt::Debug;
 
@@ -55,10 +55,10 @@ use sp_runtime::{
     OpaqueExtrinsic,
 };
 
-use sp_io::hashing::{blake2_128, keccak_256};
+use sp_io::hashing::blake2_128;
 
 use sp_core::storage::{StorageData, StorageKey};
-use sp_core::{twox_128, Bytes, H256};
+use sp_core::{twox_128, H256};
 
 use codec::{
     Codec,
@@ -282,12 +282,21 @@ async fn main() {
     let cf2 = ColumnFamilyDescriptor::new("order_value", Options::default());
     let cf3 = ColumnFamilyDescriptor::new("order_list", Options::default());
     let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3]).unwrap();
+    let db = Arc::new(db);
     // Spawn websockets task.
-    let websockets_task = tokio::spawn(websockets_listen());
+    let db1 = db.clone();
+    let websockets_task = tokio::spawn(async move {
+         websockets_listen(db1).await
+    });
     // Spawn Acuity task.
-    let acuity_task = tokio::spawn(acuity_listen(db));
+    let db2 = db.clone();
+    let acuity_task = tokio::spawn(async move {
+        acuity_listen(db2).await
+    });
     // Spawn Ethereum task.
-    let ethereum_task = tokio::spawn(ethereum_listen());
+    let ethereum_task = tokio::spawn(async move {
+        ethereum_listen().await
+    });
     // Wait to exit.
     let _result = join!(websockets_task, acuity_task, ethereum_task);
 }
@@ -348,7 +357,7 @@ impl AcuityApi {
     }
 }
 
-async fn acuity_listen(db: DB) {
+async fn acuity_listen(db: Arc<DB>) {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
         .register_type_size::<[u8; 16]>("AcuityAssetId")
@@ -391,9 +400,9 @@ async fn acuity_listen(db: DB) {
                             };
                             let order_id = order.get_order_id();
                             println!("order_id: {:?}", hex::encode(order_id));
-                            db.put_cf(db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
+                            db.put_cf(&db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
 
-                            let option = db.get_cf(db.cf_handle("order_value").unwrap(), order_id).unwrap();
+                            let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
 
                             match option {
                                 Some(result) => {
@@ -404,7 +413,7 @@ async fn acuity_listen(db: DB) {
                                         order_id: order_id,
                                     };
                                     // Remove order from list.
-                                    db.delete_cf(db.cf_handle("order_list").unwrap(), value_order_id.serialize()).unwrap();
+                                    db.delete_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize()).unwrap();
                                 }
                                 None => {},
                             }
@@ -421,10 +430,10 @@ async fn acuity_listen(db: DB) {
                                 value: new_value,
                                 order_id: order_id,
                             };
-                            db.put_cf(db.cf_handle("order_list").unwrap(), value_order_id.serialize(), order_id).unwrap();
+                            db.put_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize(), order_id).unwrap();
 
                             // Store new value
-                            db.put_cf(db.cf_handle("order_value").unwrap(), order_id, new_value.to_be_bytes()).unwrap();
+                            db.put_cf(&db.cf_handle("order_value").unwrap(), order_id, new_value.to_be_bytes()).unwrap();
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
@@ -493,9 +502,25 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
         .await
         .expect("Error during the websocket handshake occurred");
     println!("WebSocket connection established: {}", addr);
+
+    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+
+    while let Some(msg) = ws_receiver.next().await {
+//      println!("Received a message from {}: {}", addr, msg.unwrap().to_text().unwrap());
+
+      let msg = msg.unwrap();
+      if msg.is_text() ||msg.is_binary() {
+          ws_sender.send(msg).await.unwrap();
+      } else if msg.is_close() {
+          break;
+      }
+      ws_sender.send(tokio_tungstenite::tungstenite::Message::Text("okay".to_string())).await.unwrap();
+  }
+
+    println!("{} disconnected", &addr);
 }
 
-async fn websockets_listen() {
+async fn websockets_listen(db: Arc<DB>) {
     let addr = "127.0.0.1:8080".to_string();
 
     // Create the event loop and TCP listener we'll accept connections on.
