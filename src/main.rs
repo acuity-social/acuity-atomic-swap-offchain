@@ -1,4 +1,4 @@
-use rocksdb::{DB, ColumnFamilyDescriptor, Options, Direction, IteratorMode};
+use rocksdb::{DB, ColumnFamilyDescriptor, Options, IteratorMode};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::join;
 use std::{
@@ -68,11 +68,11 @@ use codec::{
 
 use proc_macro::*;
 
-use serde::Serialize;
+use serde::{Serializer, Serialize, Deserialize};
 use bincode;
 use hex;
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AcuityRuntime;
 
 impl Staking for AcuityRuntime {}
@@ -206,15 +206,15 @@ pub struct TimeoutBuyEvent {
     pub hashed_secret: [u8; 32],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize)]
-pub struct Order<T: AtomicSwap> {
-    pub seller: <T as System>::AccountId,
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize, Deserialize)]
+pub struct OrderStatic {
+    pub seller: <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId,
     pub asset_id: AssetId,
     pub price: u128,
     pub foreign_address: ForeignAddress,
 }
 
-impl<T: AtomicSwap> Order<T> {
+impl OrderStatic {
     pub fn get_order_id(&self) -> OrderId {
         let mut order_id = OrderId::default();
         order_id.0.copy_from_slice(&blake2_128(&[self.seller.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat()));
@@ -227,6 +227,16 @@ impl<T: AtomicSwap> Order<T> {
 /// This gets serialized to the 0x-prefixed hex representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
 pub struct OrderId([u8; 16]);
+
+impl Serialize for OrderId {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let hex: String = hex::encode(&self.0[..]);
+		serializer.serialize_str(&format!("0x{}", hex))
+	}
+}
 
 impl AsRef<[u8]> for OrderId {
     fn as_ref(&self) -> &[u8] {
@@ -272,14 +282,34 @@ impl ValueOrderId {
 /// An Asset Id (i.e. 16 bytes).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Deserialize)]
 pub struct AssetId([u8; 16]);
+
+impl Serialize for AssetId {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let hex: String = hex::encode(&self.0[..]);
+		serializer.serialize_str(&format!("0x{}", hex))
+	}
+}
 
 /// A Foreign Address (i.e. 32 bytes).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Deserialize)]
 pub struct ForeignAddress([u8; 32]);
+
+impl Serialize for ForeignAddress {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let hex: String = hex::encode(&self.0[..]);
+		serializer.serialize_str(&format!("0x{}", hex))
+	}
+}
 
 #[tokio::main]
 async fn main() {
@@ -392,7 +422,7 @@ async fn acuity_listen(db: Arc<DB>) {
                         "AddToOrder" => {
                             let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("AddToOrderEvent: {:?}", event);
-                            let order = Order::<AcuityRuntime> {
+                            let order = OrderStatic {
                                 seller: event.seller,
                                 asset_id: event.asset_id,
                                 price: event.price,
@@ -438,7 +468,7 @@ async fn acuity_listen(db: Arc<DB>) {
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("RemoveFromOrderEvent: {:?}", event);
-                            let order = Order::<AcuityRuntime> {
+                            let order = OrderStatic {
                                 seller: event.seller,
                                 asset_id: event.asset_id,
                                 price: event.price,
@@ -495,6 +525,18 @@ async fn ethereum_listen(db: Arc<DB>) {
         .await;
 }
 
+#[derive(Deserialize, Debug)]
+struct RequestMessage {
+    op: String,
+}
+
+#[derive(Serialize)]
+struct Order {
+    order_id: OrderId,
+    order_static: OrderStatic,
+    value: u128,
+}
+
 async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>) {
     println!("Incoming TCP connection from: {}", addr);
 
@@ -506,31 +548,50 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
 
-    let mut iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::End);
-    let orders = iterator.collect::<Vec<_>>();
-    for order in orders {
-        println!("{:?}", ValueOrderId::unserialize(order.0.to_vec()));
-    }
-
+/*
     let mut iterator = db.iterator_cf(&db.cf_handle("order_value").unwrap(), IteratorMode::Start);
     let orders = iterator.collect::<Vec<_>>();
     println!("Orders: {:?}", orders);
     let mut iterator = db.iterator_cf(&db.cf_handle("order_static").unwrap(), IteratorMode::Start);
     let orders = iterator.collect::<Vec<_>>();
     println!("Orders: {:?}", orders);
-
+*/
 
 
     while let Some(msg) = ws_receiver.next().await {
-//      println!("Received a message from {}: {}", addr, msg.unwrap().to_text().unwrap());
 
       let msg = msg.unwrap();
       if msg.is_text() ||msg.is_binary() {
-          ws_sender.send(msg).await.unwrap();
+          let msg: RequestMessage = serde_json::from_str(msg.to_text().unwrap()).unwrap();
+          println!("msg: {:?}", msg);
+
+          match msg.op.as_str() {
+              "getOrderBook" => {
+                  println!("getOrderBook");
+                  let mut iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::Start);
+                  let orders = iterator.collect::<Vec<_>>();
+                  let mut orderbook: Vec<Order> = Vec::new();
+                  for order in orders {
+                      let order = ValueOrderId::unserialize(order.0.to_vec());
+                      println!("{:?}", order);
+                      let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order.order_id).unwrap().unwrap()).unwrap();
+                      println!("{:?}", order_static);
+
+                      orderbook.push(Order {
+                          order_id: order.order_id,
+                          order_static: order_static,
+                          value: order.value,
+                      });
+                  }
+                  let json = serde_json::to_string(&orderbook).unwrap();
+                  ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await.unwrap();
+              },
+              _ => {}
+          }
+
       } else if msg.is_close() {
           break;
       }
-      ws_sender.send(tokio_tungstenite::tungstenite::Message::Text("okay".to_string())).await.unwrap();
   }
 
     println!("{} disconnected", &addr);
