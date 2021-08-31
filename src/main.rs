@@ -1,4 +1,4 @@
-use rocksdb::{DB, ColumnFamilyDescriptor, Options};
+use rocksdb::{DB, ColumnFamilyDescriptor, Options, Direction, IteratorMode};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::join;
 use std::{
@@ -250,6 +250,7 @@ fn vector_as_u8_16_array(vector: Vec<u8>) -> [u8;16] {
     arr
 }
 
+#[derive(Debug)]
 struct ValueOrderId {
     value: u128,
     order_id: OrderId,
@@ -258,6 +259,13 @@ struct ValueOrderId {
 impl ValueOrderId {
     fn serialize(&self) -> Vec<u8> {
         [array_to_vec(&self.value.to_be_bytes()), self.order_id.0.to_vec()].concat()
+    }
+
+    fn unserialize(vec: Vec<u8>) -> ValueOrderId {
+        ValueOrderId {
+            value: u128::from_be_bytes(vector_as_u8_16_array(vec[0..16].to_vec())),
+            order_id: OrderId{0: vector_as_u8_16_array(vec[16..32].to_vec())},
+        }
     }
 }
 
@@ -284,19 +292,11 @@ async fn main() {
     let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3]).unwrap();
     let db = Arc::new(db);
     // Spawn websockets task.
-    let db1 = db.clone();
-    let websockets_task = tokio::spawn(async move {
-         websockets_listen(db1).await
-    });
+    let websockets_task = tokio::spawn(websockets_listen(db.clone()));
     // Spawn Acuity task.
-    let db2 = db.clone();
-    let acuity_task = tokio::spawn(async move {
-        acuity_listen(db2).await
-    });
+    let acuity_task = tokio::spawn(acuity_listen(db.clone()));
     // Spawn Ethereum task.
-    let ethereum_task = tokio::spawn(async move {
-        ethereum_listen().await
-    });
+    let ethereum_task = tokio::spawn(ethereum_listen(db.clone()));
     // Wait to exit.
     let _result = join!(websockets_task, acuity_task, ethereum_task);
 }
@@ -480,7 +480,7 @@ async fn acuity_listen(db: Arc<DB>) {
     }
 }
 
-async fn ethereum_listen() {
+async fn ethereum_listen(db: Arc<DB>) {
     let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
     let web3 = web3::Web3::new(ws);
     let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
@@ -495,7 +495,7 @@ async fn ethereum_listen() {
         .await;
 }
 
-async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
+async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>) {
     println!("Incoming TCP connection from: {}", addr);
 
     let ws_stream = tokio_tungstenite::accept_async(raw_stream)
@@ -504,6 +504,22 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr) {
     println!("WebSocket connection established: {}", addr);
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+
+
+    let mut iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::End);
+    let orders = iterator.collect::<Vec<_>>();
+    for order in orders {
+        println!("{:?}", ValueOrderId::unserialize(order.0.to_vec()));
+    }
+
+    let mut iterator = db.iterator_cf(&db.cf_handle("order_value").unwrap(), IteratorMode::Start);
+    let orders = iterator.collect::<Vec<_>>();
+    println!("Orders: {:?}", orders);
+    let mut iterator = db.iterator_cf(&db.cf_handle("order_static").unwrap(), IteratorMode::Start);
+    let orders = iterator.collect::<Vec<_>>();
+    println!("Orders: {:?}", orders);
+
+
 
     while let Some(msg) = ws_receiver.next().await {
 //      println!("Received a message from {}: {}", addr, msg.unwrap().to_text().unwrap());
@@ -530,6 +546,6 @@ async fn websockets_listen(db: Arc<DB>) {
 
     // Let's spawn the handling of each connection in a separate task.
     while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(handle_connection(stream, addr));
+        tokio::spawn(handle_connection(stream, addr, db.clone()));
     }
 }
