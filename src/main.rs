@@ -314,6 +314,7 @@ impl Serialize for ForeignAddress {
 #[tokio::main]
 async fn main() {
     let mut db_opts = Options::default();
+    db_opts.create_if_missing(true);
     db_opts.create_missing_column_families(true);
     let path = "database";
     let cf1 = ColumnFamilyDescriptor::new("order_static", Options::default());
