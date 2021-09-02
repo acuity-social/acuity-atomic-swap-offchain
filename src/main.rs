@@ -145,9 +145,9 @@ pub trait AtomicSwap: System {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct AddToOrderEvent<T: AtomicSwap> {
     pub seller: <T as System>::AccountId,
-    pub asset_id: AssetId,
+    pub asset_id: [u8; 16],
     pub price: u128,
-    pub foreign_address: ForeignAddress,
+    pub foreign_address: [u8; 32],
     pub value: T::Balance,
 }
 
@@ -155,9 +155,9 @@ pub struct AddToOrderEvent<T: AtomicSwap> {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct RemoveFromOrderEvent<T: AtomicSwap> {
     pub seller: <T as System>::AccountId,
-    pub asset_id: AssetId,
+    pub asset_id: [u8; 16],
     pub price: u128,
-    pub foreign_address: ForeignAddress,
+    pub foreign_address: [u8; 32],
     pub value: T::Balance,
 }
 
@@ -187,7 +187,7 @@ pub struct TimeoutSellEvent {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct LockBuyEvent<T: AtomicSwap> {
     pub hashed_secret: [u8; 32],
-    pub asset_id: AssetId,
+    pub asset_id: [u8; 16],
     pub order_id: OrderId,
     pub seller: <T as System>::AccountId,
     pub value: T::Balance,
@@ -209,9 +209,9 @@ pub struct TimeoutBuyEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize, Deserialize)]
 pub struct OrderStatic {
     pub seller: <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId,
-    pub asset_id: AssetId,
+    pub asset_id: [u8; 16],
     pub price: u128,
-    pub foreign_address: ForeignAddress,
+    pub foreign_address: [u8; 32],
 }
 
 impl OrderStatic {
@@ -277,38 +277,6 @@ impl ValueOrderId {
             order_id: OrderId{0: vector_as_u8_16_array(vec[16..32].to_vec())},
         }
     }
-}
-
-/// An Asset Id (i.e. 16 bytes).
-///
-/// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Deserialize)]
-pub struct AssetId([u8; 16]);
-
-impl Serialize for AssetId {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		let hex: String = hex::encode(&self.0[..]);
-		serializer.serialize_str(&format!("0x{}", hex))
-	}
-}
-
-/// A Foreign Address (i.e. 32 bytes).
-///
-/// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Deserialize)]
-pub struct ForeignAddress([u8; 32]);
-
-impl Serialize for ForeignAddress {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		let hex: String = hex::encode(&self.0[..]);
-		serializer.serialize_str(&format!("0x{}", hex))
-	}
 }
 
 #[tokio::main]
