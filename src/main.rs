@@ -356,6 +356,52 @@ impl AcuityApi {
     }
 }
 
+async fn update_order(order_id: OrderId, db: Arc<DB>, client: Client::<AcuityRuntime>) {
+    println!("order_id: {:?}", order_id);
+    let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
+    println!("order_value: {:?}", option);
+
+    match option {
+        Some(result) => {
+            let value = u128::from_be_bytes(vector_as_u8_16_array(result));
+            println!("old value: {:?}", value);
+            let value_order_id = ValueOrderId {
+                value: value,
+                order_id: order_id,
+            };
+            // Remove order from list.
+            db.delete_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize()).unwrap();
+        }
+        None => {},
+    }
+
+    let api = AcuityApi {
+        client: client.clone()
+    };
+
+    let option = api.get_storage_data_map("AtomicSwap", "AcuityOrderIdValues", &order_id).await;
+
+    match option {
+        Ok(new_value) => {
+            println!("new value: {:?}", new_value);
+
+            // Add order back into list.
+            let value_order_id = ValueOrderId {
+                value: new_value,
+                order_id: order_id,
+            };
+            db.put_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize(), order_id).unwrap();
+
+            // Store new value
+            db.put_cf(&db.cf_handle("order_value").unwrap(), order_id, new_value.to_be_bytes()).unwrap();
+        }
+        Err(err) => {
+            db.delete_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
+        },
+    }
+
+}
+
 async fn acuity_listen(db: Arc<DB>) {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
@@ -400,39 +446,7 @@ async fn acuity_listen(db: Arc<DB>) {
                             let order_id = order.get_order_id();
                             println!("order_id: {:?}", hex::encode(order_id));
                             db.put_cf(&db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
-
-                            let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
-
-                            match option {
-                                Some(result) => {
-                                    let value = u128::from_be_bytes(vector_as_u8_16_array(result));
-                                    println!("old value: {:?}", value);
-                                    let value_order_id = ValueOrderId {
-                                        value: value,
-                                        order_id: order_id,
-                                    };
-                                    // Remove order from list.
-                                    db.delete_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize()).unwrap();
-                                }
-                                None => {},
-                            }
-
-                            let api = AcuityApi {
-                                client: client.clone()
-                            };
-
-                            let new_value = api.get_storage_data_map("AtomicSwap", "AcuityOrderIdValues", &order_id).await.unwrap();
-                            println!("new value: {:?}", new_value);
-
-                            // Add order back into list.
-                            let value_order_id = ValueOrderId {
-                                value: new_value,
-                                order_id: order_id,
-                            };
-                            db.put_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize(), order_id).unwrap();
-
-                            // Store new value
-                            db.put_cf(&db.cf_handle("order_value").unwrap(), order_id, new_value.to_be_bytes()).unwrap();
+                            update_order(order_id, db.clone(), client.clone()).await;
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
@@ -445,6 +459,7 @@ async fn acuity_listen(db: Arc<DB>) {
                             };
                             let order_id = order.get_order_id();
                             println!("order_id: {:?}", order_id);
+                            update_order(order_id, db.clone(), client.clone()).await;
                         },
                         "LockSell" => {
                             let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
@@ -537,7 +552,7 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
           match msg.op.as_str() {
               "getOrderBook" => {
                   println!("getOrderBook");
-                  let mut iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::Start);
+                  let iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::Start);
                   let orders = iterator.collect::<Vec<_>>();
                   let mut orderbook: Vec<Order> = Vec::new();
                   for order in orders {
