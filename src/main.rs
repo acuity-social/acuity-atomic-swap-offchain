@@ -495,7 +495,8 @@ async fn acuity_listen(db: Arc<DB>) {
 }
 
 async fn ethereum_listen(db: Arc<DB>) {
-    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
+//    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
+    let ws = web3::transports::WebSocket::new("ws:/127.0.0.1:8546").await.unwrap();
     let web3 = web3::Web3::new(ws);
     let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
 
