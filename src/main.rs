@@ -4,8 +4,11 @@ use tokio::join;
 use std::{
     net::SocketAddr,
     sync::Arc,
+    str::FromStr,
 };
 use web3::futures::{future, StreamExt, SinkExt};
+use web3::contract::Contract;
+use web3::types::{Address, H160, U256, FilterBuilder};
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -488,7 +491,7 @@ async fn acuity_listen(db: Arc<DB>) {
                         _ => println!("variant: {:?}", event.variant),
                     }
                 },
-                None    => break,
+                None => break,
             }
         }
     }
@@ -498,16 +501,50 @@ async fn ethereum_listen(db: Arc<DB>) {
 //    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
     let ws = web3::transports::WebSocket::new("ws:/127.0.0.1:8546").await.unwrap();
     let web3 = web3::Web3::new(ws);
+
+    let sell_addr = Address::from_str("0xd05647dd9D7B17aBEBa953fbF2dc8D8e87c19cb3").unwrap();
+    let sell_contract = Contract::from_json(web3.eth(), sell_addr, include_bytes!("AcuityAtomicSwapSell.abi")).unwrap();
+
+    let add_to_order = sell_contract.abi().event("AddToOrder").unwrap().signature();
+    let remove_from_order = sell_contract.abi().event("RemoveFromOrder").unwrap().signature();
+
+    let buy_addr = Address::from_str("0x744Ac7bbcFDDA8fdb41cF55c020d62f2109887A5").unwrap();
+    let buy_contract = Contract::from_json(web3.eth(), sell_addr, include_bytes!("AcuityAtomicSwapBuy.abi")).unwrap();
+
+    let filter = FilterBuilder::default()
+        .address(vec![sell_contract.address()])
+        .build();
+
+    let mut sub = web3.eth_subscribe().subscribe_logs(filter).await.unwrap();
+
+    loop {
+        let raw = sub.next().await;
+
+        match raw {
+            Some(event) => {
+                let event = event.unwrap();
+
+                match event.topics[0] {
+                    add_to_order => {
+                        println!("event: {:?}", event);
+                    },
+                    remove_from_order => {
+                    }
+                }
+            },
+            None => break,
+        }
+    }
+/*
     let mut sub = web3.eth_subscribe().subscribe_new_heads().await.unwrap();
-
-    println!("Got subscription id: {:?}", sub.id());
-
     (&mut sub)
         .for_each(|x| {
             println!("Ethereum block: {:?}", x.unwrap().number.unwrap());
             future::ready(())
         })
         .await;
+*/
+
 }
 
 #[derive(Deserialize, Debug)]
