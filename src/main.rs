@@ -485,10 +485,11 @@ async fn ethereum_listen(db: Arc<DB>) {
     let remove_from_order = sell_contract.abi().event("RemoveFromOrder").unwrap().signature();
 
     let buy_addr = Address::from_str("0x744Ac7bbcFDDA8fdb41cF55c020d62f2109887A5").unwrap();
-    let buy_contract = Contract::from_json(web3.eth(), sell_addr, include_bytes!("AcuityAtomicSwapBuy.abi")).unwrap();
+    let buy_contract = Contract::from_json(web3.eth(), buy_addr, include_bytes!("AcuityAtomicSwapBuy.abi")).unwrap();
 
     let filter = FilterBuilder::default()
         .address(vec![sell_contract.address()])
+        .address(vec![buy_contract.address()])
         .build();
 
     let mut sub = web3.eth_subscribe().subscribe_logs(filter).await.unwrap();
@@ -499,10 +500,10 @@ async fn ethereum_listen(db: Arc<DB>) {
         match raw {
             Some(event) => {
                 let event = event.unwrap();
+                println!("event: {:?}", event);
 
                 match event.topics[0] {
                     add_to_order => {
-                        println!("event: {:?}", event);
                     },
                     remove_from_order => {
                     }
