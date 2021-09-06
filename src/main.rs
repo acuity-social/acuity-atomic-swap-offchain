@@ -6,9 +6,9 @@ use std::{
     sync::Arc,
     str::FromStr,
 };
-use web3::futures::{future, StreamExt, SinkExt};
+use web3::futures::{StreamExt, SinkExt};
 use web3::contract::Contract;
-use web3::types::{Address, H160, U256, FilterBuilder};
+use web3::types::{Address, FilterBuilder};
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -71,7 +71,7 @@ use codec::{
 
 use proc_macro::*;
 
-use serde::{Serializer, Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use bincode;
 use hex;
 
@@ -191,7 +191,7 @@ pub struct TimeoutSellEvent {
 pub struct LockBuyEvent<T: AtomicSwap> {
     pub hashed_secret: [u8; 32],
     pub asset_id: [u8; 16],
-    pub order_id: OrderId,
+    pub order_id: [u8; 16],
     pub seller: <T as System>::AccountId,
     pub value: T::Balance,
     pub timeout: T::Moment,
@@ -218,32 +218,8 @@ pub struct OrderStatic {
 }
 
 impl OrderStatic {
-    pub fn get_order_id(&self) -> OrderId {
-        let mut order_id = OrderId::default();
-        order_id.0.copy_from_slice(&blake2_128(&[self.seller.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat()));
-        order_id
-    }
-}
-
-/// An Order Id (i.e. 16 bytes).
-///
-/// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, Default)]
-pub struct OrderId([u8; 16]);
-
-impl Serialize for OrderId {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		let hex: String = hex::encode(&self.0[..]);
-		serializer.serialize_str(&format!("0x{}", hex))
-	}
-}
-
-impl AsRef<[u8]> for OrderId {
-    fn as_ref(&self) -> &[u8] {
-		&self.0
+    pub fn get_order_id(&self) -> [u8; 16] {
+        blake2_128(&[self.seller.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat())
     }
 }
 
@@ -266,18 +242,18 @@ fn vector_as_u8_16_array(vector: Vec<u8>) -> [u8;16] {
 #[derive(Debug)]
 struct ValueOrderId {
     value: u128,
-    order_id: OrderId,
+    order_id: [u8; 16],
 }
 
 impl ValueOrderId {
     fn serialize(&self) -> Vec<u8> {
-        [array_to_vec(&self.value.to_be_bytes()), self.order_id.0.to_vec()].concat()
+        [array_to_vec(&self.value.to_be_bytes()), self.order_id.to_vec()].concat()
     }
 
     fn unserialize(vec: Vec<u8>) -> ValueOrderId {
         ValueOrderId {
             value: u128::from_be_bytes(vector_as_u8_16_array(vec[0..16].to_vec())),
-            order_id: OrderId{0: vector_as_u8_16_array(vec[16..32].to_vec())},
+            order_id: vector_as_u8_16_array(vec[16..32].to_vec()),
         }
     }
 }
@@ -339,7 +315,7 @@ impl AcuityApi {
         &self,
         module_name: &str,
         storage_name: &str,
-        key: &OrderId,
+        key: &[u8; 16],
     ) -> Result<u128, &str> {
         let mut storage_key = twox_128(module_name.as_bytes()).to_vec();
         storage_key.extend(twox_128(storage_name.as_bytes()).to_vec());
@@ -359,7 +335,7 @@ impl AcuityApi {
     }
 }
 
-async fn update_order(order_id: OrderId, db: Arc<DB>, client: Client::<AcuityRuntime>) {
+async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRuntime>) {
     println!("order_id: {:?}", order_id);
     let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
     println!("order_value: {:?}", option);
@@ -550,11 +526,12 @@ async fn ethereum_listen(db: Arc<DB>) {
 #[derive(Deserialize, Debug)]
 struct RequestMessage {
     op: String,
+    order_id: Option<String>,
 }
 
 #[derive(Serialize)]
 struct Order {
-    order_id: OrderId,
+    order_id: String,
     order_static: OrderStatic,
     value: u128,
 }
@@ -594,19 +571,46 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                   let orders = iterator.collect::<Vec<_>>();
                   let mut orderbook: Vec<Order> = Vec::new();
                   for order in orders {
+                      println!("{:?}", order);
                       let order = ValueOrderId::unserialize(order.0.to_vec());
                       println!("{:?}", order);
                       let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order.order_id).unwrap().unwrap()).unwrap();
                       println!("{:?}", order_static);
 
                       orderbook.push(Order {
-                          order_id: order.order_id,
+                          order_id: hex::encode(order.order_id),
                           order_static: order_static,
                           value: order.value,
                       });
                   }
                   let json = serde_json::to_string(&orderbook).unwrap();
                   ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await.unwrap();
+              },
+              "getOrder" => {
+                  println!("getOrder");
+
+                  let order_id: [u8; 16] = vector_as_u8_16_array(hex::decode(msg.order_id.unwrap()).unwrap());
+
+                  let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
+                  println!("order_value: {:?}", option);
+
+                  match option {
+                      Some(result) => {
+                          let value = u128::from_be_bytes(vector_as_u8_16_array(result));
+                          println!("value: {:?}", value);
+                          let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_id).unwrap().unwrap()).unwrap();
+                          println!("{:?}", order_static);
+
+                          let order = Order {
+                              order_id: hex::encode(order_id),
+                              order_static: order_static,
+                              value: value,
+                          };
+                          let json = serde_json::to_string(&order).unwrap();
+                          ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await.unwrap();
+                      }
+                      None => {},
+                  }
               },
               _ => {}
           }
