@@ -8,7 +8,7 @@ use std::{
 };
 use web3::futures::{StreamExt, SinkExt};
 use web3::contract::Contract;
-use web3::types::{Address, FilterBuilder};
+use web3::types::{Address, FilterBuilder, U64};
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -231,9 +231,49 @@ fn array_to_vec(arr: &[u8]) -> Vec<u8> {
      vector
 }
 
-fn vector_as_u8_16_array(vector: Vec<u8>) -> [u8;16] {
-    let mut arr = [0u8;16];
+fn vector_as_u8_32_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 32] {
+    let mut arr = [0u8; 32];
+    for i in 0..32 {
+        arr[i] = vector[offset + i];
+    }
+    arr
+}
+
+fn vector_as_u8_32_array(vector: &Vec<u8>) -> [u8; 32] {
+    let mut arr = [0u8; 32];
+    for i in 0..32 {
+        arr[i] = vector[i];
+    }
+    arr
+}
+
+fn vector_as_u8_16_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 16] {
+    let mut arr = [0u8; 16];
     for i in 0..16 {
+        arr[i] = vector[offset + i];
+    }
+    arr
+}
+
+fn vector_as_u8_16_array(vector: &Vec<u8>) -> [u8; 16] {
+    let mut arr = [0u8; 16];
+    for i in 0..16 {
+        arr[i] = vector[i];
+    }
+    arr
+}
+
+fn vector_as_u8_8_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 8] {
+    let mut arr = [0u8; 8];
+    for i in 0..8 {
+        arr[i] = vector[offset + i];
+    }
+    arr
+}
+
+fn vector_as_u8_8_array(vector: &Vec<u8>) -> [u8; 8] {
+    let mut arr = [0u8; 8];
+    for i in 0..8 {
         arr[i] = vector[i];
     }
     arr
@@ -252,8 +292,29 @@ impl ValueOrderId {
 
     fn unserialize(vec: Vec<u8>) -> ValueOrderId {
         ValueOrderId {
-            value: u128::from_be_bytes(vector_as_u8_16_array(vec[0..16].to_vec())),
-            order_id: vector_as_u8_16_array(vec[16..32].to_vec()),
+            value: u128::from_be_bytes(vector_as_u8_16_array(&vec[0..16].to_vec())),
+            order_id: vector_as_u8_16_array(&vec[16..32].to_vec()),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct OrderIdValueHashedSecret {
+    order_id: [u8; 16],
+    value: u64,
+    hashed_secret: [u8; 32],
+}
+
+impl OrderIdValueHashedSecret {
+    fn serialize(&self) -> Vec<u8> {
+        [self.order_id.to_vec(), array_to_vec(&self.value.to_be_bytes()), self.hashed_secret.to_vec()].concat()
+    }
+
+    fn unserialize(vec: Vec<u8>) -> OrderIdValueHashedSecret {
+        OrderIdValueHashedSecret {
+            order_id: vector_as_u8_16_array(&vec[0..16].to_vec()),
+            value: u64::from_be_bytes(vector_as_u8_8_array(&vec[16..24].to_vec())),
+            hashed_secret: vector_as_u8_32_array(&vec[24..56].to_vec()),
         }
     }
 }
@@ -267,7 +328,8 @@ async fn main() {
     let cf1 = ColumnFamilyDescriptor::new("order_static", Options::default());
     let cf2 = ColumnFamilyDescriptor::new("order_value", Options::default());
     let cf3 = ColumnFamilyDescriptor::new("order_list", Options::default());
-    let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3]).unwrap();
+    let cf4 = ColumnFamilyDescriptor::new("buy_lock_list", Options::default());
+    let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3, cf4]).unwrap();
     let db = Arc::new(db);
     // Spawn websockets task.
     let websockets_task = tokio::spawn(websockets_listen(db.clone()));
@@ -342,7 +404,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
 
     match option {
         Some(result) => {
-            let value = u128::from_be_bytes(vector_as_u8_16_array(result));
+            let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
             println!("old value: {:?}", value);
             let value_order_id = ValueOrderId {
                 value: value,
@@ -486,6 +548,7 @@ async fn ethereum_listen(db: Arc<DB>) {
 
     let buy_addr = Address::from_str("0x744Ac7bbcFDDA8fdb41cF55c020d62f2109887A5").unwrap();
     let buy_contract = Contract::from_json(web3.eth(), buy_addr, include_bytes!("AcuityAtomicSwapBuy.abi")).unwrap();
+    let lock_buy = buy_contract.abi().event("LockBuy").unwrap().signature();
 
     let filter = FilterBuilder::default()
         .address(vec![sell_contract.address()])
@@ -500,13 +563,41 @@ async fn ethereum_listen(db: Arc<DB>) {
         match raw {
             Some(event) => {
                 let event = event.unwrap();
-                println!("event: {:?}", event);
 
-                match event.topics[0] {
-                    add_to_order => {
+                match hex::encode(event.address).as_str() {
+                    // Sell contract
+                    "d05647dd9D7B17aBEBa953fbF2dc8D8e87c19cb3" => {
+                        println!("sell event: {:?}", event);
                     },
-                    remove_from_order => {
-                    }
+                    // Buy contract
+                    "744ac7bbcfdda8fdb41cf55c020d62f2109887a5" => {
+                        println!("buy event: {:?}", event);
+
+                        if event.topics[0] == lock_buy {
+                            println!("LockBuy: {:?}", hex::encode(&event.data.0));
+                            let hashed_secret = vector_as_u8_32_array(&event.data.0);
+                            let asset_id = vector_as_u8_16_array_offset(&event.data.0, 32);
+                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 48);
+                            let seller = vector_as_u8_32_array_offset(&event.data.0, 64);
+                            let value = vector_as_u8_8_array_offset(&event.data.0, 120);
+                            let timeout = vector_as_u8_32_array_offset(&event.data.0, 128);
+                            println!("asset_id: {:?}", hex::encode(&asset_id));
+                            println!("seller: {:?}", hex::encode(&seller));
+                            println!("timeout: {:?}", hex::encode(&timeout));
+
+                            let order_id_value_hashed_secret = OrderIdValueHashedSecret {
+                                order_id: order_id,
+                                value: U64::from(value).as_u64(),
+                                hashed_secret: hashed_secret,
+                            };
+
+                            println!("{:?}", order_id_value_hashed_secret);
+
+                            db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), hashed_secret).unwrap();
+
+                        }
+                    },
+                    &_ => {},
                 }
             },
             None => break,
@@ -590,14 +681,14 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
               "getOrder" => {
                   println!("getOrder");
 
-                  let order_id: [u8; 16] = vector_as_u8_16_array(hex::decode(msg.order_id.unwrap()).unwrap());
+                  let order_id: [u8; 16] = vector_as_u8_16_array(&hex::decode(msg.order_id.unwrap()).unwrap());
 
                   let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
                   println!("order_value: {:?}", option);
 
                   match option {
                       Some(result) => {
-                          let value = u128::from_be_bytes(vector_as_u8_16_array(result));
+                          let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
                           println!("value: {:?}", value);
                           let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_id).unwrap().unwrap()).unwrap();
                           println!("{:?}", order_static);
