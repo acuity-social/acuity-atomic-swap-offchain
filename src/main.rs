@@ -621,11 +621,19 @@ struct RequestMessage {
     order_id: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Order {
     order_id: String,
     order_static: OrderStatic,
     value: u128,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(tag = "type")]
+enum ResponseMessage {
+    OrderBook {
+        order_book: Vec<Order>,
+    },
 }
 
 async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>) {
@@ -675,7 +683,12 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                           value: order.value,
                       });
                   }
-                  let json = serde_json::to_string(&orderbook).unwrap();
+
+                  let response = ResponseMessage::OrderBook {
+                      order_book: orderbook,
+                  };
+                  let json = serde_json::to_string(&response).unwrap();
+                  println!("{:?}", json);
                   ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await.unwrap();
               },
               "getOrder" => {
@@ -704,6 +717,9 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                       None => {},
                   }
               },
+              "getBuyLocks" => {
+                  println!("getBuyLocks");
+              },
               _ => {}
           }
 
@@ -712,7 +728,7 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
       }
   }
 
-    println!("{} disconnected", &addr);
+//    println!("{} disconnected", &addr);
 }
 
 async fn websockets_listen(db: Arc<DB>) {
