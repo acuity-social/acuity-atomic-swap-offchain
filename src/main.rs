@@ -637,6 +637,9 @@ enum ResponseMessage {
     OrderBook {
         order_book: Vec<Order>,
     },
+    Order {
+        order: Order,
+    },
 }
 
 async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>) {
@@ -714,7 +717,12 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                               order_static: order_static,
                               value: value,
                           };
-                          let json = serde_json::to_string(&order).unwrap();
+
+                          let response = ResponseMessage::Order {
+                              order: order,
+                          };
+                          let json = serde_json::to_string(&response).unwrap();
+                          println!("{:?}", json);
                           ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await.unwrap();
                       }
                       None => {},
