@@ -616,9 +616,12 @@ async fn ethereum_listen(db: Arc<DB>) {
 }
 
 #[derive(Deserialize, Debug)]
-struct RequestMessage {
-    op: String,
-    order_id: Option<String>,
+#[serde(tag = "type")]
+enum RequestMessage {
+    GetOrderBook,
+    GetOrder {
+        order_id: String,
+    },
 }
 
 #[derive(Serialize, Debug)]
@@ -664,8 +667,8 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
           let msg: RequestMessage = serde_json::from_str(msg.to_text().unwrap()).unwrap();
           println!("msg: {:?}", msg);
 
-          match msg.op.as_str() {
-              "getOrderBook" => {
+          match msg {
+              RequestMessage::GetOrderBook => {
                   println!("getOrderBook");
                   let iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::Start);
                   let orders = iterator.collect::<Vec<_>>();
@@ -691,10 +694,10 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                   println!("{:?}", json);
                   ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await.unwrap();
               },
-              "getOrder" => {
+              RequestMessage::GetOrder { order_id } => {
                   println!("getOrder");
 
-                  let order_id: [u8; 16] = vector_as_u8_16_array(&hex::decode(msg.order_id.unwrap()).unwrap());
+                  let order_id: [u8; 16] = vector_as_u8_16_array(&hex::decode(order_id).unwrap());
 
                   let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
                   println!("order_value: {:?}", option);
@@ -716,9 +719,6 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                       }
                       None => {},
                   }
-              },
-              "getBuyLocks" => {
-                  println!("getBuyLocks");
               },
               _ => {}
           }
