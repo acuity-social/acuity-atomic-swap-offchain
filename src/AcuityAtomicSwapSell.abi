@@ -47,15 +47,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint256",
+        "internalType": "uint64",
         "name": "value",
-        "type": "uint256"
+        "type": "uint64"
       },
       {
         "indexed": false,
-        "internalType": "uint256",
+        "internalType": "uint48",
         "name": "timeout",
-        "type": "uint256"
+        "type": "uint48"
       }
     ],
     "name": "LockSell",

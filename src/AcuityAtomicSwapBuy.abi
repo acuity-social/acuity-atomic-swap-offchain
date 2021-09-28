@@ -22,15 +22,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint256",
+        "internalType": "uint48",
         "name": "value",
-        "type": "uint256"
+        "type": "uint48"
       },
       {
         "indexed": false,
-        "internalType": "uint256",
+        "internalType": "uint48",
         "name": "timeout",
-        "type": "uint256"
+        "type": "uint48"
       }
     ],
     "name": "LockBuy",
