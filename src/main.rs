@@ -1,10 +1,11 @@
-use rocksdb::{DB, ColumnFamilyDescriptor, Options, IteratorMode};
+use rocksdb::{DB, ColumnFamilyDescriptor, Options, IteratorMode, Direction};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::join;
 use std::{
     net::SocketAddr,
     sync::Arc,
     str::FromStr,
+    fmt,
 };
 use web3::futures::{StreamExt, SinkExt};
 use web3::contract::Contract;
@@ -298,7 +299,6 @@ impl ValueOrderId {
     }
 }
 
-#[derive(Debug)]
 struct OrderIdValueHashedSecret {
     order_id: [u8; 16],
     value: u64,
@@ -316,6 +316,16 @@ impl OrderIdValueHashedSecret {
             value: u64::from_be_bytes(vector_as_u8_8_array(&vec[16..24].to_vec())),
             hashed_secret: vector_as_u8_32_array(&vec[24..56].to_vec()),
         }
+    }
+}
+
+impl fmt::Debug for OrderIdValueHashedSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OrderIdValueHashedSecret")
+         .field("order_id", &hex::encode(&self.order_id))
+         .field("value", &self.value)
+         .field("hashed_secret", &hex::encode(&self.hashed_secret))
+         .finish()
     }
 }
 
@@ -583,6 +593,7 @@ async fn ethereum_listen(db: Arc<DB>) {
                             let timeout = vector_as_u8_32_array_offset(&event.data.0, 128);
                             println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("seller: {:?}", hex::encode(&seller));
+                            println!("value: {:?}", hex::encode(&value));
                             println!("timeout: {:?}", hex::encode(&timeout));
 
                             let order_id_value_hashed_secret = OrderIdValueHashedSecret {
@@ -594,7 +605,6 @@ async fn ethereum_listen(db: Arc<DB>) {
                             println!("{:?}", order_id_value_hashed_secret);
 
                             db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), hashed_secret).unwrap();
-
                         }
                     },
                     &_ => {},
@@ -639,6 +649,7 @@ enum ResponseMessage {
     },
     Order {
         order: Order,
+        hashed_secrets: Vec<String>,
     },
 }
 
@@ -718,8 +729,18 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                               value: value,
                           };
 
+                          let iterator = db.iterator_cf(&db.cf_handle("buy_lock_list").unwrap(), IteratorMode::From(&order_id, Direction::Forward));
+                          let mut hashed_secrets: Vec<String> = Vec::new();
+
+                          for (key, value) in iterator {
+                              let order_id_value_hashed_secret = OrderIdValueHashedSecret::unserialize(key.to_vec());
+                              if (order_id_value_hashed_secret.order_id != order_id) { break };
+                              hashed_secrets.push(hex::encode(&value.to_vec()));
+                          }
+
                           let response = ResponseMessage::Order {
                               order: order,
+                              hashed_secrets: hashed_secrets,
                           };
                           let json = serde_json::to_string(&response).unwrap();
                           println!("{:?}", json);
