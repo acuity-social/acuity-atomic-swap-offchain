@@ -31,6 +31,12 @@
         "internalType": "uint48",
         "name": "timeout",
         "type": "uint48"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "buyer",
+        "type": "address"
       }
     ],
     "name": "LockBuy",
@@ -79,19 +85,62 @@
     "name": "getBuyLock",
     "outputs": [
       {
-        "internalType": "address",
-        "name": "seller",
-        "type": "address"
-      },
+        "components": [
+          {
+            "internalType": "address",
+            "name": "seller",
+            "type": "address"
+          },
+          {
+            "internalType": "uint48",
+            "name": "value",
+            "type": "uint48"
+          },
+          {
+            "internalType": "uint48",
+            "name": "timeout",
+            "type": "uint48"
+          }
+        ],
+        "internalType": "struct AcuityAtomicSwapBuy.BuyLock",
+        "name": "buyLock",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
-        "internalType": "uint256",
-        "name": "value",
-        "type": "uint256"
-      },
+        "internalType": "bytes32[]",
+        "name": "hashedSecrets",
+        "type": "bytes32[]"
+      }
+    ],
+    "name": "getBuyLocks",
+    "outputs": [
       {
-        "internalType": "uint256",
-        "name": "timeout",
-        "type": "uint256"
+        "components": [
+          {
+            "internalType": "address",
+            "name": "seller",
+            "type": "address"
+          },
+          {
+            "internalType": "uint48",
+            "name": "value",
+            "type": "uint48"
+          },
+          {
+            "internalType": "uint48",
+            "name": "timeout",
+            "type": "uint48"
+          }
+        ],
+        "internalType": "struct AcuityAtomicSwapBuy.BuyLock[]",
+        "name": "buyLocks",
+        "type": "tuple[]"
       }
     ],
     "stateMutability": "view",

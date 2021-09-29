@@ -248,6 +248,14 @@ fn vector_as_u8_32_array(vector: &Vec<u8>) -> [u8; 32] {
     arr
 }
 
+fn vector_as_u8_20_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 20] {
+    let mut arr = [0u8; 20];
+    for i in 0..20 {
+        arr[i] = vector[offset + i];
+    }
+    arr
+}
+
 fn vector_as_u8_16_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 16] {
     let mut arr = [0u8; 16];
     for i in 0..16 {
@@ -589,22 +597,31 @@ async fn ethereum_listen(db: Arc<DB>) {
                             let asset_id = vector_as_u8_16_array_offset(&event.data.0, 32);
                             let order_id = vector_as_u8_16_array_offset(&event.data.0, 48);
                             let seller = vector_as_u8_32_array_offset(&event.data.0, 64);
-                            let value = vector_as_u8_8_array_offset(&event.data.0, 120);
-                            let timeout = vector_as_u8_32_array_offset(&event.data.0, 128);
+                            let value = U64::from(vector_as_u8_8_array_offset(&event.data.0, 120)).as_u64();
+                            let timeout = U64::from(vector_as_u8_8_array_offset(&event.data.0, 152)).as_u64();
+                            let buyer = hex::encode(&vector_as_u8_20_array_offset(&event.data.0, 172));
                             println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("seller: {:?}", hex::encode(&seller));
-                            println!("value: {:?}", hex::encode(&value));
-                            println!("timeout: {:?}", hex::encode(&timeout));
+                            println!("value: {:?}", value);
+                            println!("timeout: {:?}", timeout);
+                            println!("buyer: {:?}", buyer);
 
                             let order_id_value_hashed_secret = OrderIdValueHashedSecret {
                                 order_id: order_id,
-                                value: U64::from(value).as_u64(),
+                                value: value,
                                 hashed_secret: hashed_secret,
+                            };
+
+                            let buy_lock = BuyLock {
+                                hashed_secret: hex::encode(&hashed_secret.to_vec()),
+                                value: value,
+                                timeout: timeout,
+                                buyer: buyer,
                             };
 
                             println!("{:?}", order_id_value_hashed_secret);
 
-                            db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), hashed_secret).unwrap();
+                            db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
                         }
                     },
                     &_ => {},
@@ -641,6 +658,14 @@ struct Order {
     value: u128,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct BuyLock {
+    hashed_secret: String,
+    value: u64,
+    timeout: u64,
+    buyer: String,
+}
+
 #[derive(Serialize, Debug)]
 #[serde(tag = "type")]
 enum ResponseMessage {
@@ -649,7 +674,7 @@ enum ResponseMessage {
     },
     Order {
         order: Order,
-        hashed_secrets: Vec<String>,
+        buy_locks: Vec<BuyLock>,
     },
 }
 
@@ -730,17 +755,17 @@ async fn handle_connection(raw_stream: TcpStream, addr: SocketAddr, db: Arc<DB>)
                           };
 
                           let iterator = db.iterator_cf(&db.cf_handle("buy_lock_list").unwrap(), IteratorMode::From(&order_id, Direction::Forward));
-                          let mut hashed_secrets: Vec<String> = Vec::new();
+                          let mut buy_locks: Vec<BuyLock> = Vec::new();
 
                           for (key, value) in iterator {
                               let order_id_value_hashed_secret = OrderIdValueHashedSecret::unserialize(key.to_vec());
-                              if (order_id_value_hashed_secret.order_id != order_id) { break };
-                              hashed_secrets.push(hex::encode(&value.to_vec()));
+                              if order_id_value_hashed_secret.order_id != order_id { break };
+                              buy_locks.push(bincode::deserialize(&value).unwrap());
                           }
 
                           let response = ResponseMessage::Order {
                               order: order,
-                              hashed_secrets: hashed_secrets,
+                              buy_locks: buy_locks,
                           };
                           let json = serde_json::to_string(&response).unwrap();
                           println!("{:?}", json);
