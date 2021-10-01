@@ -9,7 +9,7 @@ use std::{
 };
 use web3::futures::{StreamExt, SinkExt};
 use web3::contract::Contract;
-use web3::types::{Address, FilterBuilder, U64};
+use web3::types::{Address, FilterBuilder, U64, U128};
 use substrate_subxt::{
     balances::{
         AccountData,
@@ -309,7 +309,7 @@ impl ValueOrderId {
 
 struct OrderIdValueHashedSecret {
     order_id: [u8; 16],
-    value: u64,
+    value: u128,
     hashed_secret: [u8; 32],
 }
 
@@ -321,7 +321,7 @@ impl OrderIdValueHashedSecret {
     fn unserialize(vec: Vec<u8>) -> OrderIdValueHashedSecret {
         OrderIdValueHashedSecret {
             order_id: vector_as_u8_16_array(&vec[0..16].to_vec()),
-            value: u64::from_be_bytes(vector_as_u8_8_array(&vec[16..24].to_vec())),
+            value: u128::from_be_bytes(vector_as_u8_16_array(&vec[16..24].to_vec())),
             hashed_secret: vector_as_u8_32_array(&vec[24..56].to_vec()),
         }
     }
@@ -597,8 +597,8 @@ async fn ethereum_listen(db: Arc<DB>) {
                             let asset_id = vector_as_u8_16_array_offset(&event.data.0, 32);
                             let order_id = vector_as_u8_16_array_offset(&event.data.0, 48);
                             let seller = vector_as_u8_32_array_offset(&event.data.0, 64);
-                            let value = U64::from(vector_as_u8_8_array_offset(&event.data.0, 120)).as_u64();
-                            let timeout = U64::from(vector_as_u8_8_array_offset(&event.data.0, 152)).as_u64();
+                            let value = u128::from(U64::from(vector_as_u8_8_array_offset(&event.data.0, 120)).as_u64()) * 1_000_000_000;
+                            let timeout = U64::from(vector_as_u8_8_array_offset(&event.data.0, 152)).as_u32();
                             let buyer = hex::encode(&vector_as_u8_20_array_offset(&event.data.0, 172));
                             println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("seller: {:?}", hex::encode(&seller));
@@ -661,8 +661,8 @@ struct Order {
 #[derive(Serialize, Deserialize, Debug)]
 struct BuyLock {
     hashed_secret: String,
-    value: u64,
-    timeout: u64,
+    value: u128,
+    timeout: u32,
     buyer: String,
 }
 
