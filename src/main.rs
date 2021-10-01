@@ -321,8 +321,8 @@ impl OrderIdValueHashedSecret {
     fn unserialize(vec: Vec<u8>) -> OrderIdValueHashedSecret {
         OrderIdValueHashedSecret {
             order_id: vector_as_u8_16_array(&vec[0..16].to_vec()),
-            value: u128::from_be_bytes(vector_as_u8_16_array(&vec[16..24].to_vec())),
-            hashed_secret: vector_as_u8_32_array(&vec[24..56].to_vec()),
+            value: u128::from_be_bytes(vector_as_u8_16_array(&vec[16..32].to_vec())),
+            hashed_secret: vector_as_u8_32_array(&vec[32..64].to_vec()),
         }
     }
 }
