@@ -53,9 +53,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint48",
+        "internalType": "uint32",
         "name": "timeout",
-        "type": "uint48"
+        "type": "uint32"
       }
     ],
     "name": "LockSell",
@@ -274,9 +274,9 @@
             "type": "uint64"
           },
           {
-            "internalType": "uint48",
+            "internalType": "uint32",
             "name": "timeout",
-            "type": "uint48"
+            "type": "uint32"
           }
         ],
         "internalType": "struct AcuityAtomicSwapSell.SellLock",
@@ -310,9 +310,9 @@
             "type": "uint64"
           },
           {
-            "internalType": "uint48",
+            "internalType": "uint32",
             "name": "timeout",
-            "type": "uint48"
+            "type": "uint32"
           }
         ],
         "internalType": "struct AcuityAtomicSwapSell.SellLock[]",
@@ -341,14 +341,14 @@
         "type": "bytes32"
       },
       {
-        "internalType": "uint256",
+        "internalType": "uint64",
         "name": "value",
-        "type": "uint256"
+        "type": "uint64"
       },
       {
-        "internalType": "uint256",
+        "internalType": "uint32",
         "name": "timeout",
-        "type": "uint256"
+        "type": "uint32"
       }
     ],
     "name": "lockSell",

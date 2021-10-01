@@ -22,15 +22,15 @@
       },
       {
         "indexed": false,
-        "internalType": "uint48",
+        "internalType": "uint64",
         "name": "value",
-        "type": "uint48"
+        "type": "uint64"
       },
       {
         "indexed": false,
-        "internalType": "uint48",
+        "internalType": "uint32",
         "name": "timeout",
-        "type": "uint48"
+        "type": "uint32"
       },
       {
         "indexed": false,
@@ -92,14 +92,14 @@
             "type": "address"
           },
           {
-            "internalType": "uint48",
+            "internalType": "uint64",
             "name": "value",
-            "type": "uint48"
+            "type": "uint64"
           },
           {
-            "internalType": "uint48",
+            "internalType": "uint32",
             "name": "timeout",
-            "type": "uint48"
+            "type": "uint32"
           }
         ],
         "internalType": "struct AcuityAtomicSwapBuy.BuyLock",
@@ -128,14 +128,14 @@
             "type": "address"
           },
           {
-            "internalType": "uint48",
+            "internalType": "uint64",
             "name": "value",
-            "type": "uint48"
+            "type": "uint64"
           },
           {
-            "internalType": "uint48",
+            "internalType": "uint32",
             "name": "timeout",
-            "type": "uint48"
+            "type": "uint32"
           }
         ],
         "internalType": "struct AcuityAtomicSwapBuy.BuyLock[]",
@@ -164,9 +164,9 @@
         "type": "address"
       },
       {
-        "internalType": "uint256",
+        "internalType": "uint32",
         "name": "timeout",
-        "type": "uint256"
+        "type": "uint32"
       }
     ],
     "name": "lockBuy",
