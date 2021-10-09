@@ -5,7 +5,7 @@ use std::{
 use rocksdb::DB;
 use web3::futures::StreamExt;
 use web3::contract::Contract;
-use web3::types::{Address, FilterBuilder, U64};
+use web3::types::{Address, FilterBuilder, U128};
 
 use crate::shared::*;
 
@@ -49,13 +49,13 @@ pub async fn ethereum_listen(db: Arc<DB>) {
 
                         if event.topics[0] == lock_buy {
                             println!("LockBuy: {:?}", hex::encode(&event.data.0));
-                            let hashed_secret = vector_as_u8_32_array(&event.data.0);
-                            let asset_id = vector_as_u8_16_array_offset(&event.data.0, 32);
-                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 48);
-                            let seller = vector_as_u8_32_array_offset(&event.data.0, 64);
-                            let value = u128::from(U64::from(vector_as_u8_8_array_offset(&event.data.0, 120)).as_u64()) * 1_000_000_000;
-                            let timeout = U64::from(vector_as_u8_8_array_offset(&event.data.0, 152)).as_u32();
-                            let buyer = hex::encode(&vector_as_u8_20_array_offset(&event.data.0, 172));
+                            let buyer = hex::encode(&vector_as_u8_20_array_offset(&event.data.0, 12));
+                            let seller = vector_as_u8_20_array_offset(&event.data.0, 44);
+                            let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 64);
+                            let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
+                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
+                            let asset_id = vector_as_u8_16_array_offset(&event.data.0, 160);
+                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 176);
                             println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("seller: {:?}", hex::encode(&seller));
                             println!("value: {:?}", value);

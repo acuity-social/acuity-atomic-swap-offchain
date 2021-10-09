@@ -80,7 +80,7 @@ impl OrderStatic {
 pub struct BuyLock {
     pub hashed_secret: String,
     pub value: u128,
-    pub timeout: u32,
+    pub timeout: u128,
     pub buyer: String,
 }
 
@@ -132,6 +132,7 @@ pub fn vector_as_u8_16_array(vector: &Vec<u8>) -> [u8; 16] {
     arr
 }
 
+/*
 pub fn vector_as_u8_8_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 8] {
     let mut arr = [0u8; 8];
     for i in 0..8 {
@@ -139,7 +140,7 @@ pub fn vector_as_u8_8_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 8] {
     }
     arr
 }
-/*
+
 pub fn vector_as_u8_8_array(vector: &Vec<u8>) -> [u8; 8] {
     let mut arr = [0u8; 8];
     for i in 0..8 {
