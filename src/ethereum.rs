@@ -6,10 +6,11 @@ use rocksdb::DB;
 use web3::futures::StreamExt;
 use web3::contract::Contract;
 use web3::types::{Address, FilterBuilder, U128};
+use tokio::sync::broadcast::Sender;
 
 use crate::shared::*;
 
-pub async fn ethereum_listen(db: Arc<DB>) {
+pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 //    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
     let ws = web3::transports::WebSocket::new("ws:/127.0.0.1:8546").await.unwrap();
     let web3 = web3::Web3::new(ws);
@@ -69,7 +70,7 @@ pub async fn ethereum_listen(db: Arc<DB>) {
                             };
 
                             let buy_lock = BuyLock {
-                                hashed_secret: hex::encode(&hashed_secret.to_vec()),
+                                hashed_secret: hex::encode(hashed_secret),
                                 value: value,
                                 timeout: timeout,
                                 buyer: buyer,
@@ -78,6 +79,8 @@ pub async fn ethereum_listen(db: Arc<DB>) {
                             println!("{:?}", order_id_value_hashed_secret);
 
                             db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
+                            tx.send(RequestMessage::GetOrderBook).unwrap();
+                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
                         }
                     },
                     &_ => {},

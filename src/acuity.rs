@@ -59,6 +59,7 @@ use std::{
     sync::Arc,
 };
 use rocksdb::{DB};
+use tokio::sync::broadcast::Sender;
 
 
 use crate::shared::*;
@@ -301,7 +302,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
 
 }
 
-pub async fn acuity_listen(db: Arc<DB>) {
+pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 16]>("AcuityOrderId")
         .register_type_size::<[u8; 16]>("AcuityAssetId")
@@ -346,6 +347,8 @@ pub async fn acuity_listen(db: Arc<DB>) {
                             println!("order_id: {:?}", hex::encode(order_id));
                             db.put_cf(&db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
                             update_order(order_id, db.clone(), client.clone()).await;
+                            tx.send(RequestMessage::GetOrderBook).unwrap();
+                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
                         },
                         "RemoveFromOrder" => {
                             let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();

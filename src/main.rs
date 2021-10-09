@@ -1,4 +1,5 @@
 use tokio::join;
+use tokio::sync::broadcast;
 use rocksdb::{DB, ColumnFamilyDescriptor, Options};
 use std::sync::Arc;
 
@@ -23,12 +24,13 @@ async fn main() {
     let cf4 = ColumnFamilyDescriptor::new("buy_lock_list", Options::default());
     let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3, cf4]).unwrap();
     let db = Arc::new(db);
-    // Spawn websockets task.
-    let websockets_task = tokio::spawn(websockets_listen(db.clone()));
+    let (tx, _rx) = broadcast::channel(16);
     // Spawn Acuity task.
-    let acuity_task = tokio::spawn(acuity_listen(db.clone()));
+    let acuity_task = tokio::spawn(acuity_listen(db.clone(), tx.clone()));
     // Spawn Ethereum task.
-    let ethereum_task = tokio::spawn(ethereum_listen(db.clone()));
+    let ethereum_task = tokio::spawn(ethereum_listen(db.clone(), tx.clone()));
+    // Spawn websockets task.
+    let websockets_task = tokio::spawn(websockets_listen(db.clone(), tx));
     // Wait to exit.
     let _result = join!(websockets_task, acuity_task, ethereum_task);
 }

@@ -84,6 +84,15 @@ pub struct BuyLock {
     pub buyer: String,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
+pub enum RequestMessage {
+    GetOrderBook,
+    GetOrder {
+        order_id: String,
+    },
+}
+
 pub fn array_to_vec(arr: &[u8]) -> Vec<u8> {
      let mut vector = Vec::new();
      for i in arr.iter() {
