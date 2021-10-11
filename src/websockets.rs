@@ -10,24 +10,36 @@ use web3::futures::{StreamExt, SinkExt};
 use crate::shared::*;
 
 #[derive(Serialize, Debug)]
-struct Order {
+#[serde(rename_all = "camelCase")]
+struct JsonOrder {
     order_id: String,
     order_static: OrderStatic,
     value: u128,
 }
 
 #[derive(Serialize, Debug)]
-#[serde(tag = "type")]
-enum ResponseMessage {
-    OrderBook {
-        order_book: Vec<Order>,
-    },
-    Order {
-        order: Order,
-        buy_locks: Vec<BuyLock>,
-    },
+#[serde(rename_all = "camelCase")]
+pub struct JsonLock {
+    pub buyer: String,
+    pub hashed_secret: String,
+    pub buy_lock_value: u128,
+    pub buy_lock_timeout: u128,
+    pub sell_lock_timeout: u128,
+    pub sell_lock_state: String,
 }
 
+#[derive(Serialize, Debug)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
+enum JsonResponseMessage {
+    OrderBook {
+        order_book: Vec<JsonOrder>,
+    },
+    Order {
+        order: JsonOrder,
+        locks: Vec<JsonLock>,
+    },
+}
 
 async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
     println!("msg: {:?}", msg);
@@ -37,7 +49,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
             println!("getOrderBook");
             let iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::Start);
             let orders = iterator.collect::<Vec<_>>();
-            let mut orderbook: Vec<Order> = Vec::new();
+            let mut orderbook: Vec<JsonOrder> = Vec::new();
             for order in orders {
                 println!("{:?}", order);
                 let order = ValueOrderId::unserialize(order.0.to_vec());
@@ -45,14 +57,14 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                 let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order.order_id).unwrap().unwrap()).unwrap();
                 println!("{:?}", order_static);
 
-                orderbook.push(Order {
+                orderbook.push(JsonOrder {
                     order_id: hex::encode(order.order_id),
                     order_static: order_static,
                     value: order.value,
                 });
             }
 
-            let response = ResponseMessage::OrderBook {
+            let response = JsonResponseMessage::OrderBook {
                 order_book: orderbook,
             };
             serde_json::to_string(&response).unwrap()
@@ -72,24 +84,45 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                     let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_id).unwrap().unwrap()).unwrap();
                     println!("{:?}", order_static);
 
-                    let order = Order {
+                    let order = JsonOrder {
                         order_id: hex::encode(order_id),
                         order_static: order_static,
                         value: value,
                     };
 
                     let iterator = db.iterator_cf(&db.cf_handle("buy_lock_list").unwrap(), IteratorMode::From(&order_id, Direction::Forward));
-                    let mut buy_locks: Vec<BuyLock> = Vec::new();
+                    let mut locks: Vec<JsonLock> = Vec::new();
 
                     for (key, value) in iterator {
                         let order_id_value_hashed_secret = OrderIdValueHashedSecret::unserialize(key.to_vec());
                         if order_id_value_hashed_secret.order_id != order_id { break };
-                        buy_locks.push(bincode::deserialize(&value).unwrap());
+                        let buy_lock: BuyLock = bincode::deserialize(&value).unwrap();
+
+                        println!("buy_lock.hashed_secret: {:?}", buy_lock.hashed_secret);
+
+                        let sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), buy_lock.hashed_secret).unwrap() {
+                            Some(result) => bincode::deserialize(&result).unwrap(),
+                            None => SellLock {
+                                timeout: 0,
+                                state: LockState::NotLocked,
+                            }
+                        };
+
+                        println!("sell_lock.hashed_secret: {:?}", sell_lock);
+
+                        locks.push(JsonLock{
+                            buyer: hex::encode(buy_lock.buyer),
+                            hashed_secret: hex::encode(buy_lock.hashed_secret),
+                            buy_lock_value: buy_lock.value,
+                            buy_lock_timeout: buy_lock.timeout,
+                            sell_lock_timeout: sell_lock.timeout,
+                            sell_lock_state: "".to_string(),
+                        });
                     }
 
-                    let response = ResponseMessage::Order {
+                    let response = JsonResponseMessage::Order {
                         order: order,
-                        buy_locks: buy_locks,
+                        locks: locks,
                     };
                     serde_json::to_string(&response).unwrap()
                 },

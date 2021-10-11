@@ -50,7 +50,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                         if event.topics[0] == lock_buy {
                             println!("LockBuy: {:?}", hex::encode(&event.data.0));
-                            let buyer = hex::encode(&vector_as_u8_20_array_offset(&event.data.0, 12));
+                            let buyer = vector_as_u8_20_array_offset(&event.data.0, 12);
                             let seller = vector_as_u8_20_array_offset(&event.data.0, 44);
                             let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 64);
                             let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
@@ -70,7 +70,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             };
 
                             let buy_lock = BuyLock {
-                                hashed_secret: hex::encode(hashed_secret),
+                                hashed_secret: hashed_secret,
                                 value: value,
                                 timeout: timeout,
                                 buyer: buyer,

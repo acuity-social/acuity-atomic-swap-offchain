@@ -366,6 +366,12 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         "LockSell" => {
                             let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                             println!("LockSellEvent: {:?}", event);
+                            let sell_lock = SellLock {
+                                state: LockState::Locked,
+                                timeout: event.timeout.into(),
+                            };
+                            db.put_cf(&db.cf_handle("sell_lock").unwrap(), event.hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
+                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
                         },
                         "UnlockSell" => {
                             let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
