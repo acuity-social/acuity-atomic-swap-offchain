@@ -371,6 +371,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 timeout: event.timeout.into(),
                             };
                             db.put_cf(&db.cf_handle("sell_lock").unwrap(), event.hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
+                            update_order(event.order_id, db.clone(), client.clone()).await;
                             tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
                         },
                         "UnlockSell" => {
