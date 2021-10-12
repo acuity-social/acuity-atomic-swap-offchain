@@ -12,6 +12,7 @@ use sp_runtime::{
     MultiSignature,
 };
 use sp_io::hashing::blake2_128;
+use strum_macros::Display;
 
 #[derive(Debug)]
 pub struct ValueOrderId {
@@ -84,7 +85,7 @@ pub struct BuyLock {
     pub buyer: [u8; 20],
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Display, Serialize, Deserialize, Debug)]
 pub enum LockState {
     NotLocked,
     Locked,
