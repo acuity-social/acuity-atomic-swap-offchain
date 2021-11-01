@@ -60,11 +60,11 @@ use std::{
 };
 use rocksdb::{DB};
 use tokio::sync::broadcast::Sender;
-
+use scale_info::TypeInfo;
 
 use crate::shared::*;
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct AcuityRuntime;
 
 impl Staking for AcuityRuntime {}
@@ -311,7 +311,9 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
         .register_type_size::<[u8; 32]>("AcuitySecret")
         .register_type_size::<u64>("Timestamp")
         .register_type_size::<[u8; 20]>("EthereumAddress")
-        .set_url("ws://127.0.0.1:9946").build().await.unwrap();
+        .set_url("ws://127.0.0.1:9946")
+        .skip_type_sizes_check()
+        .build().await.unwrap();
 
     let mut blocks = client.subscribe_blocks().await.unwrap();
 
