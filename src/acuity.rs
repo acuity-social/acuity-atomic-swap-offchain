@@ -304,6 +304,11 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
 
 pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
     let client = ClientBuilder::<AcuityRuntime>::new()
+        .register_type_size::<[u8; 32]>("T::AccountId")
+        .register_type_size::<u128>("T::Balance")
+        .register_type_size::<u128>("BalanceOf<T>")
+        .register_type_size::<u128>("BalanceOf<T, I>")
+        .register_type_size::<u64>("T::Moment")
         .register_type_size::<[u8; 16]>("AcuityOrderId")
         .register_type_size::<[u8; 16]>("AcuityAssetId")
         .register_type_size::<[u8; 32]>("AcuityForeignAddress")
@@ -315,92 +320,83 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
         .skip_type_sizes_check()
         .build().await.unwrap();
 
-    let mut blocks = client.subscribe_blocks().await.unwrap();
+    let sub = client.subscribe_events().await.unwrap();
+    let decoder = client.events_decoder();
+    let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);
 
     loop {
-        let block = blocks.next().await.unwrap().unwrap();
-        println!("Acuity block: {:?}", block.number);
-        let block = client.block_hash(Some(block.number.into())).await.unwrap().unwrap();
+        let raw = sub.next().await;
+        // Pattern match to retrieve the value
+        match raw {
+            Some(event) => {
+                let event = event.unwrap();
+                if event.module != "AtomicSwap" { continue; }
 
-        let sub = client.subscribe_events().await.unwrap();
-        let decoder = client.events_decoder();
-        let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);
-        sub.filter_block(block);
-
-        loop {
-            let raw = sub.next().await;
-            // Pattern match to retrieve the value
-            match raw {
-                Some(event) => {
-                    let event = event.unwrap();
-                    if event.module != "AtomicSwap" { continue; }
-
-                    match event.variant.as_str() {
-                        "AddToOrder" => {
-                            let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
-                            println!("AddToOrderEvent: {:?}", event);
-                            let order = OrderStatic {
-                                seller: event.seller,
-                                asset_id: event.asset_id,
-                                price: event.price,
-                                foreign_address: event.foreign_address,
-                            };
-                            let order_id = order.get_order_id();
-                            println!("order_id: {:?}", hex::encode(order_id));
-                            db.put_cf(&db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
-                            update_order(order_id, db.clone(), client.clone()).await;
-                            tx.send(RequestMessage::GetOrderBook).unwrap();
-                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
-                        },
-                        "RemoveFromOrder" => {
-                            let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
-                            println!("RemoveFromOrderEvent: {:?}", event);
-                            let order = OrderStatic {
-                                seller: event.seller,
-                                asset_id: event.asset_id,
-                                price: event.price,
-                                foreign_address: event.foreign_address,
-                            };
-                            let order_id = order.get_order_id();
-                            println!("order_id: {:?}", order_id);
-                            update_order(order_id, db.clone(), client.clone()).await;
-                        },
-                        "LockSell" => {
-                            let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
-                            println!("LockSellEvent: {:?}", event);
-                            let sell_lock = SellLock {
-                                state: LockState::Locked,
-                                timeout: event.timeout.into(),
-                            };
-                            db.put_cf(&db.cf_handle("sell_lock").unwrap(), event.hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
-                            update_order(event.order_id, db.clone(), client.clone()).await;
-                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
-                        },
-                        "UnlockSell" => {
-                            let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
-                            println!("UnlockSellEvent: {:?}", event);
-                        },
-                        "TimeoutSell" => {
-                            let event = TimeoutSellEvent::decode(&mut &event.data[..]).unwrap();
-                            println!("TimeoutSellEvent: {:?}", event);
-                        },
-                        "LockBuy" => {
-                            let event = LockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
-                            println!("LockBuyEvent: {:?}", event);
-                        },
-                        "UnlockBuy" => {
-                            let event = UnlockBuyEvent::decode(&mut &event.data[..]).unwrap();
-                            println!("UnlockBuyEvent: {:?}", event);
-                        },
-                        "TimeoutBuy" => {
-                            let event = TimeoutBuyEvent::decode(&mut &event.data[..]).unwrap();
-                            println!("TimeoutBuyEvent: {:?}", event);
-                        },
-                        _ => println!("variant: {:?}", event.variant),
-                    }
-                },
-                None => break,
-            }
+                match event.variant.as_str() {
+                    "AddToOrder" => {
+                        let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                        println!("AddToOrderEvent: {:?}", event);
+                        let order = OrderStatic {
+                            seller: event.seller,
+                            asset_id: event.asset_id,
+                            price: event.price,
+                            foreign_address: event.foreign_address,
+                        };
+                        let order_id = order.get_order_id();
+                        println!("order_id: {:?}", hex::encode(order_id));
+                        db.put_cf(&db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
+                        update_order(order_id, db.clone(), client.clone()).await;
+                        tx.send(RequestMessage::GetOrderBook).unwrap();
+                        tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
+                    },
+                    "RemoveFromOrder" => {
+                        let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                        println!("RemoveFromOrderEvent: {:?}", event);
+                        let order = OrderStatic {
+                            seller: event.seller,
+                            asset_id: event.asset_id,
+                            price: event.price,
+                            foreign_address: event.foreign_address,
+                        };
+                        let order_id = order.get_order_id();
+                        println!("order_id: {:?}", order_id);
+                        update_order(order_id, db.clone(), client.clone()).await;
+                    },
+                    "LockSell" => {
+                        let event = LockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                        println!("LockSellEvent: {:?}", event);
+                        let sell_lock = SellLock {
+                            state: LockState::Locked,
+                            timeout: event.timeout.into(),
+                        };
+                        db.put_cf(&db.cf_handle("sell_lock").unwrap(), event.hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
+                        update_order(event.order_id, db.clone(), client.clone()).await;
+                        tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
+                    },
+                    "UnlockSell" => {
+                        let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                        println!("UnlockSellEvent: {:?}", event);
+                    },
+                    "TimeoutSell" => {
+                        let event = TimeoutSellEvent::decode(&mut &event.data[..]).unwrap();
+                        println!("TimeoutSellEvent: {:?}", event);
+                    },
+                    "LockBuy" => {
+                        let event = LockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
+                        println!("LockBuyEvent: {:?}", event);
+                    },
+                    "UnlockBuy" => {
+                        let event = UnlockBuyEvent::decode(&mut &event.data[..]).unwrap();
+                        println!("UnlockBuyEvent: {:?}", event);
+                    },
+                    "TimeoutBuy" => {
+                        let event = TimeoutBuyEvent::decode(&mut &event.data[..]).unwrap();
+                        println!("TimeoutBuyEvent: {:?}", event);
+                    },
+                    _ => println!("variant: {:?}", event.variant),
+                }
+            },
+            None => break,
         }
     }
 }
