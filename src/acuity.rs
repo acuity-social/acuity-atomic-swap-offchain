@@ -213,15 +213,16 @@ pub struct RemoveFromOrderEvent<T: AtomicSwap> {
 /// LockSell event.
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct LockSellEvent<T: AtomicSwap> {
-    pub hashed_secret: [u8; 32],
     pub order_id: [u8; 16],
-    pub value: T::Balance,
+    pub hashed_secret: [u8; 32],
     pub timeout: T::Moment,
+    pub value: T::Balance,
 }
 
 /// UnlockSell event.
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct UnlockSellEvent<T: AtomicSwap> {
+    pub order_id: [u8; 16],
     pub secret: [u8; 32],
     pub buyer: <T as System>::AccountId,
 }
@@ -229,29 +230,33 @@ pub struct UnlockSellEvent<T: AtomicSwap> {
 /// TimeoutSell event.
 #[derive(Debug, Decode, Eq, PartialEq)]
 pub struct TimeoutSellEvent {
+    pub order_id: [u8; 16],
     pub hashed_secret: [u8; 32],
 }
 
 /// LockBuy event.
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct LockBuyEvent<T: AtomicSwap> {
+    pub buyer: <T as System>::AccountId,
+    pub seller: <T as System>::AccountId,
     pub hashed_secret: [u8; 32],
+    pub timeout: T::Moment,
+    pub value: T::Balance,
     pub asset_id: [u8; 16],
     pub order_id: [u8; 16],
-    pub seller: <T as System>::AccountId,
-    pub value: T::Balance,
-    pub timeout: T::Moment,
 }
 
 /// UnlockBuy event.
 #[derive(Debug, Decode, Eq, PartialEq)]
-pub struct UnlockBuyEvent {
+pub struct UnlockBuyEvent<T: AtomicSwap> {
+    pub buyer: <T as System>::AccountId,
     pub hashed_secret: [u8; 32],
 }
 
 /// TimeoutBuy event.
 #[derive(Debug, Decode, Eq, PartialEq)]
-pub struct TimeoutBuyEvent {
+pub struct TimeoutBuyEvent<T: AtomicSwap> {
+    pub buyer: <T as System>::AccountId,
     pub hashed_secret: [u8; 32],
 }
 
@@ -386,11 +391,11 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         println!("LockBuyEvent: {:?}", event);
                     },
                     "UnlockBuy" => {
-                        let event = UnlockBuyEvent::decode(&mut &event.data[..]).unwrap();
+                        let event = UnlockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("UnlockBuyEvent: {:?}", event);
                     },
                     "TimeoutBuy" => {
-                        let event = TimeoutBuyEvent::decode(&mut &event.data[..]).unwrap();
+                        let event = TimeoutBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("TimeoutBuyEvent: {:?}", event);
                     },
                     _ => println!("variant: {:?}", event.variant),
