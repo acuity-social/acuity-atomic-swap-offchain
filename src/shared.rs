@@ -91,6 +91,7 @@ pub enum LockState {
     Locked,
     Unlocked,
     TimedOut,
+    Invalid,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
