@@ -44,7 +44,7 @@ use sp_runtime::{
     MultiSignature,
     OpaqueExtrinsic,
 };
-use sp_io::hashing::blake2_128;
+use sp_io::hashing::{blake2_128, keccak_256};
 use sp_core::storage::StorageKey;
 use sp_core::twox_128;
 use codec::{
@@ -310,6 +310,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
 pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
     let client = ClientBuilder::<AcuityRuntime>::new()
         .register_type_size::<[u8; 32]>("T::AccountId")
+        .register_type_size::<[u8; 32]>("<T as frame_system::Config>::AccountId")
         .register_type_size::<u128>("T::Balance")
         .register_type_size::<u128>("BalanceOf<T>")
         .register_type_size::<u128>("BalanceOf<T, I>")
@@ -381,6 +382,21 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                     "UnlockSell" => {
                         let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("UnlockSellEvent: {:?}", event);
+                        let hashed_secret = keccak_256(&event.secret);
+
+                        let mut sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), hashed_secret).unwrap() {
+                            Some(result) => bincode::deserialize(&result).unwrap(),
+                            None => SellLock {
+                                timeout: 0,
+                                state: LockState::NotLocked,
+                            }
+                        };
+
+                        println!("sell_lock: {:?}", sell_lock);
+
+                        sell_lock.state = LockState::Unlocked;
+                        db.put_cf(&db.cf_handle("sell_lock").unwrap(), hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
+                        tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
                     },
                     "TimeoutSell" => {
                         let event = TimeoutSellEvent::decode(&mut &event.data[..]).unwrap();
