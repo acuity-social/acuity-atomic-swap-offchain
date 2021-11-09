@@ -23,9 +23,10 @@ pub struct JsonLock {
     pub buyer: String,
     pub hashed_secret: String,
     pub buy_lock_value: u128,
+    pub buy_lock_state: String,
     pub buy_lock_timeout: u128,
-    pub sell_lock_timeout: u128,
     pub sell_lock_state: String,
+    pub sell_lock_timeout: u128,
 }
 
 #[derive(Serialize, Debug)]
@@ -108,15 +109,16 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                             }
                         };
 
-                        println!("sell_lock.hashed_secret: {:?}", sell_lock);
+                        println!("sell_lock: {:?}", sell_lock);
 
                         locks.push(JsonLock{
                             buyer: hex::encode(buy_lock.buyer),
                             hashed_secret: hex::encode(buy_lock.hashed_secret),
                             buy_lock_value: buy_lock.value,
+                            buy_lock_state: buy_lock.state.to_string(),
                             buy_lock_timeout: buy_lock.timeout,
-                            sell_lock_timeout: sell_lock.timeout,
                             sell_lock_state: sell_lock.state.to_string(),
+                            sell_lock_timeout: sell_lock.timeout,
                         });
                     }
 

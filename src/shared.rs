@@ -77,14 +77,6 @@ impl OrderStatic {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BuyLock {
-    pub hashed_secret: [u8; 32],
-    pub value: u128,
-    pub timeout: u128,
-    pub buyer: [u8; 20],
-}
-
 #[derive(Display, Serialize, Deserialize, Debug)]
 pub enum LockState {
     NotLocked,
@@ -92,6 +84,15 @@ pub enum LockState {
     Unlocked,
     TimedOut,
     Invalid,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BuyLock {
+    pub hashed_secret: [u8; 32],
+    pub value: u128,
+    pub timeout: u128,
+    pub buyer: [u8; 20],
+    pub state: LockState,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -74,6 +74,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 value: value,
                                 timeout: timeout,
                                 buyer: buyer,
+                                state: LockState::Locked,
                             };
 
                             println!("{:?}", order_id_value_hashed_secret);
