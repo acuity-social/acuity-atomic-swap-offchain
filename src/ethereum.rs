@@ -72,6 +72,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             };
 
                             let buy_lock = BuyLock {
+                                order_id: order_id,
                                 value: value,
                                 timeout: timeout,
                                 buyer: buyer,
@@ -95,7 +96,12 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             println!("seller: {:?}", hex::encode(&seller));
 
                             let hashed_secret = keccak_256(&secret);
-
+                            let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), hashed_secret).unwrap().unwrap();
+                            let mut buy_lock: BuyLock = bincode::deserialize(&result).unwrap();
+                            println!("buy_lock: {:?}", buy_lock);
+                            buy_lock.state = LockState::Unlocked;
+                            db.put_cf(&db.cf_handle("buy_lock").unwrap(), hashed_secret, bincode::serialize(&buy_lock).unwrap()).unwrap();
+                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(buy_lock.order_id) } ).unwrap();
                         }
                     },
                     &_ => {},

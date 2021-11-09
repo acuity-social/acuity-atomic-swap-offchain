@@ -88,6 +88,7 @@ pub enum LockState {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BuyLock {
+    pub order_id: [u8; 16],
     pub value: u128,
     pub timeout: u128,
     pub buyer: [u8; 20],
