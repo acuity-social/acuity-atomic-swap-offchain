@@ -21,9 +21,10 @@ async fn main() {
     let cf1 = ColumnFamilyDescriptor::new("order_static", Options::default());
     let cf2 = ColumnFamilyDescriptor::new("order_value", Options::default());
     let cf3 = ColumnFamilyDescriptor::new("order_list", Options::default());
-    let cf4 = ColumnFamilyDescriptor::new("buy_lock_list", Options::default());
-    let cf5 = ColumnFamilyDescriptor::new("sell_lock", Options::default());
-    let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3, cf4, cf5]).unwrap();
+    let cf4 = ColumnFamilyDescriptor::new("order_lock_list", Options::default());
+    let cf5 = ColumnFamilyDescriptor::new("buy_lock", Options::default());
+    let cf6 = ColumnFamilyDescriptor::new("sell_lock", Options::default());
+    let db = DB::open_cf_descriptors(&db_opts, path, vec![cf1, cf2, cf3, cf4, cf5, cf6]).unwrap();
     let db = Arc::new(db);
     let (tx, _rx) = broadcast::channel(16);
     // Spawn Acuity task.

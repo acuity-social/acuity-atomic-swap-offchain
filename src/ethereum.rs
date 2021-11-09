@@ -72,7 +72,6 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             };
 
                             let buy_lock = BuyLock {
-                                hashed_secret: hashed_secret,
                                 value: value,
                                 timeout: timeout,
                                 buyer: buyer,
@@ -81,7 +80,8 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                             println!("{:?}", order_id_value_hashed_secret);
 
-                            db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
+                            db.put_cf(&db.cf_handle("order_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), hashed_secret).unwrap();
+                            db.put_cf(&db.cf_handle("buy_lock").unwrap(), hashed_secret, bincode::serialize(&buy_lock).unwrap()).unwrap();
                             tx.send(RequestMessage::GetOrderBook).unwrap();
                             tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
                         }

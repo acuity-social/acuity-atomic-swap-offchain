@@ -91,17 +91,22 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                         value: value,
                     };
 
-                    let iterator = db.iterator_cf(&db.cf_handle("buy_lock_list").unwrap(), IteratorMode::From(&order_id, Direction::Forward));
+                    let iterator = db.iterator_cf(&db.cf_handle("order_lock_list").unwrap(), IteratorMode::From(&order_id, Direction::Forward));
                     let mut locks: Vec<JsonLock> = Vec::new();
 
-                    for (key, value) in iterator {
+                    for (key, _value) in iterator {
                         let order_id_value_hashed_secret = OrderIdValueHashedSecret::unserialize(key.to_vec());
                         if order_id_value_hashed_secret.order_id != order_id { break };
-                        let buy_lock: BuyLock = bincode::deserialize(&value).unwrap();
+                        println!("hashed_secret: {:?}", order_id_value_hashed_secret.hashed_secret);
 
-                        println!("buy_lock.hashed_secret: {:?}", buy_lock.hashed_secret);
+                        let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), order_id_value_hashed_secret.hashed_secret).unwrap().unwrap();
 
-                        let sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), buy_lock.hashed_secret).unwrap() {
+                        let buy_lock: BuyLock = bincode::deserialize(&result).unwrap();
+
+                        println!("buy_lock: {:?}", buy_lock);
+
+
+                        let sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), order_id_value_hashed_secret.hashed_secret).unwrap() {
                             Some(result) => bincode::deserialize(&result).unwrap(),
                             None => SellLock {
                                 timeout: 0,
@@ -113,7 +118,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
                         locks.push(JsonLock{
                             buyer: hex::encode(buy_lock.buyer),
-                            hashed_secret: hex::encode(buy_lock.hashed_secret),
+                            hashed_secret: hex::encode(order_id_value_hashed_secret.hashed_secret),
                             buy_lock_value: buy_lock.value,
                             buy_lock_state: buy_lock.state.to_string(),
                             buy_lock_timeout: buy_lock.timeout,
