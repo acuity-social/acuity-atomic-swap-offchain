@@ -7,6 +7,7 @@ use web3::futures::StreamExt;
 use web3::contract::Contract;
 use web3::types::{Address, FilterBuilder, U128};
 use tokio::sync::broadcast::Sender;
+use sp_io::hashing::keccak_256;
 
 use crate::shared::*;
 
@@ -24,6 +25,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
     let buy_addr = Address::from_str("0x744Ac7bbcFDDA8fdb41cF55c020d62f2109887A5").unwrap();
     let buy_contract = Contract::from_json(web3.eth(), buy_addr, include_bytes!("AcuityAtomicSwapBuy.abi")).unwrap();
     let lock_buy = buy_contract.abi().event("LockBuy").unwrap().signature();
+    let unlock_buy = buy_contract.abi().event("UnlockBuy").unwrap().signature();
 
     let filter = FilterBuilder::default()
         .address(vec![sell_contract.address()])
@@ -82,6 +84,18 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             db.put_cf(&db.cf_handle("buy_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
                             tx.send(RequestMessage::GetOrderBook).unwrap();
                             tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
+                        }
+                        if event.topics[0] == unlock_buy {
+                            println!("UnlockBuy: {:?}", hex::encode(&event.data.0));
+                            let buyer = vector_as_u8_20_array_offset(&event.data.0, 12);
+                            let secret = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            let seller = vector_as_u8_20_array_offset(&event.data.0, 76);
+                            println!("buyer: {:?}", hex::encode(&buyer));
+                            println!("secret: {:?}", hex::encode(&secret));
+                            println!("seller: {:?}", hex::encode(&seller));
+
+                            let hashed_secret = keccak_256(&secret);
+
                         }
                     },
                     &_ => {},
