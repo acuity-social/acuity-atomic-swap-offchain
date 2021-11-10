@@ -99,6 +99,7 @@ pub struct BuyLock {
 pub struct SellLock {
     pub state: LockState,
     pub timeout: u128,
+    pub secret: Option<[u8; 32]>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

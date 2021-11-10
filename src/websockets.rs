@@ -27,6 +27,7 @@ pub struct JsonLock {
     pub buy_lock_timeout: u128,
     pub sell_lock_state: String,
     pub sell_lock_timeout: u128,
+    pub secret: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -100,9 +101,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                         println!("hashed_secret: {:?}", order_id_value_hashed_secret.hashed_secret);
 
                         let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), order_id_value_hashed_secret.hashed_secret).unwrap().unwrap();
-
                         let buy_lock: BuyLock = bincode::deserialize(&result).unwrap();
-
                         println!("buy_lock: {:?}", buy_lock);
 
 
@@ -111,6 +110,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                             None => SellLock {
                                 timeout: 0,
                                 state: LockState::NotLocked,
+                                secret: None,
                             }
                         };
 
@@ -124,6 +124,10 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                             buy_lock_timeout: buy_lock.timeout,
                             sell_lock_state: sell_lock.state.to_string(),
                             sell_lock_timeout: sell_lock.timeout,
+                            secret: match sell_lock.secret {
+                                Some(secret) => Some(hex::encode(secret)),
+                                None => None,
+                            },
                         });
                     }
 

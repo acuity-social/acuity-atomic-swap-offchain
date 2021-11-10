@@ -374,6 +374,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         let sell_lock = SellLock {
                             state: LockState::Locked,
                             timeout: event.timeout.into(),
+                            secret: None,
                         };
                         db.put_cf(&db.cf_handle("sell_lock").unwrap(), event.hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
                         update_order(event.order_id, db.clone(), client.clone()).await;
@@ -389,12 +390,14 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             None => SellLock {
                                 timeout: 0,
                                 state: LockState::NotLocked,
+                                secret: None,
                             }
                         };
 
                         println!("sell_lock: {:?}", sell_lock);
 
                         sell_lock.state = LockState::Unlocked;
+                        sell_lock.secret = Some(event.secret);
                         db.put_cf(&db.cf_handle("sell_lock").unwrap(), hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
                         tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
                     },
