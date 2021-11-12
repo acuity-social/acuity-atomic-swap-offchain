@@ -244,6 +244,7 @@ pub struct LockBuyEvent<T: AtomicSwap> {
     pub value: T::Balance,
     pub asset_id: [u8; 16],
     pub order_id: [u8; 16],
+    pub foreign_address: [u8; 32],
 }
 
 /// UnlockBuy event.
