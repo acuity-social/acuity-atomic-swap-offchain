@@ -92,6 +92,7 @@ pub struct BuyLock {
     pub value: u128,
     pub timeout: u128,
     pub buyer: [u8; 20],
+    pub foreign_address: [u8; 32],
     pub state: LockState,
 }
 

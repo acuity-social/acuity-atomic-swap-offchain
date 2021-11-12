@@ -59,11 +59,13 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
                             let asset_id = vector_as_u8_16_array_offset(&event.data.0, 160);
                             let order_id = vector_as_u8_16_array_offset(&event.data.0, 176);
+                            let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 192);
                             println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("seller: {:?}", hex::encode(&seller));
                             println!("value: {:?}", value);
                             println!("timeout: {:?}", timeout);
                             println!("buyer: {:?}", buyer);
+                            println!("foreign_address: {:?}", foreign_address);
 
                             let order_id_value_hashed_secret = OrderIdValueHashedSecret {
                                 order_id: order_id,
@@ -76,6 +78,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 value: value,
                                 timeout: timeout,
                                 buyer: buyer,
+                                foreign_address: foreign_address,
                                 state: LockState::Locked,
                             };
 

@@ -25,6 +25,7 @@ pub struct JsonLock {
     pub buy_lock_value: u128,
     pub buy_lock_state: String,
     pub buy_lock_timeout: u128,
+    pub buy_lock_foreign_address: String,
     pub sell_lock_state: String,
     pub sell_lock_timeout: u128,
     pub secret: Option<String>,
@@ -122,6 +123,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                             buy_lock_value: buy_lock.value,
                             buy_lock_state: buy_lock.state.to_string(),
                             buy_lock_timeout: buy_lock.timeout,
+                            buy_lock_foreign_address: hex::encode(buy_lock.foreign_address),
                             sell_lock_state: sell_lock.state.to_string(),
                             sell_lock_timeout: sell_lock.timeout,
                             secret: match sell_lock.secret {
