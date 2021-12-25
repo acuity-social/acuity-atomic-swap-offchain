@@ -52,11 +52,15 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         if event.topics[0] == add_to_order {
                             println!("AddToOrder: {:?}", hex::encode(&event.data.0));
 //                            event AddToOrder(address seller, bytes32 assetIdPrice, bytes32 foreignAddress, uint256 value);
-                            let seller = vector_as_u8_20_array_offset(&event.data.0, 12);
-                            let asset_id = vector_as_u8_16_array_offset(&event.data.0, 32);
-                            let price = U128::from(vector_as_u8_16_array_offset(&event.data.0, 48)).as_u128();
-                            let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 64);
-                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
+                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 16);
+                            let seller = vector_as_u8_20_array_offset(&event.data.0, 44);
+//                            let chain_id = U32::from(vector_as_u8_4_array_offset(&event.data.0, 64)).as_u32();
+//                            let adapter_id = U32::from(vector_as_u8_4_array_offset(&event.data.0, 68)).as_u32();
+                            let asset_id = vector_as_u8_8_array_offset(&event.data.0, 68);
+                            let price = U128::from(vector_as_u8_16_array_offset(&event.data.0, 76)).as_u128();
+                            let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 96);
+                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
+                            println!("order_id: {:?}", hex::encode(&order_id));
                             println!("seller: {:?}", hex::encode(&seller));
                             println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("price: {:?}", price);
@@ -86,7 +90,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                         if event.topics[0] == lock_buy {
                             println!("LockBuy: {:?}", hex::encode(&event.data.0));
-                            let buyer = vector_as_u8_20_array_offset(&event.data.0, 12);
+                            let buyer = vector_as_u8_32_array(&event.data.0);
                             let seller = vector_as_u8_20_array_offset(&event.data.0, 44);
                             let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 64);
                             let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
@@ -101,7 +105,9 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             println!("buyer: {:?}", hex::encode(&buyer));
                             println!("foreign_address: {:?}", hex::encode(&foreign_address));
 
-                            let order_id_value_hashed_secret = OrderIdValueHashedSecret {
+                            let order_lock_list_key = OrderLockListKey {
+                                chain_id: 76,
+                                adapter_id: 0,
                                 order_id: order_id,
                                 value: value,
                                 hashed_secret: hashed_secret,
@@ -116,16 +122,23 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 state: LockState::Locked,
                             };
 
-                            println!("{:?}", order_id_value_hashed_secret);
+                            println!("{:?}", order_lock_list_key);
 
-                            db.put_cf(&db.cf_handle("order_lock_list").unwrap(), order_id_value_hashed_secret.serialize(), hashed_secret).unwrap();
-                            db.put_cf(&db.cf_handle("buy_lock").unwrap(), hashed_secret, bincode::serialize(&buy_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrderBook).unwrap();
-                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
+                            db.put_cf(&db.cf_handle("order_lock_list").unwrap(), order_lock_list_key.serialize(), hashed_secret).unwrap();
+
+                            let lock_key = LockKey {
+                                chain_id: 76,
+                                adapter_id: 02,
+                                hashed_secret: hashed_secret,
+                            };
+
+                            db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: <[u8; 8]>::default(), buy_chain_id: 60, buy_asset_id: <[u8; 8]>::default() }).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_buy {
                             println!("UnlockBuy: {:?}", hex::encode(&event.data.0));
-                            let buyer = vector_as_u8_20_array_offset(&event.data.0, 12);
+                            let buyer = vector_as_u8_32_array(&event.data.0);
                             let secret = vector_as_u8_32_array_offset(&event.data.0, 32);
                             let seller = vector_as_u8_20_array_offset(&event.data.0, 76);
                             println!("buyer: {:?}", hex::encode(&buyer));
@@ -133,12 +146,17 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             println!("seller: {:?}", hex::encode(&seller));
 
                             let hashed_secret = keccak_256(&secret);
-                            let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), hashed_secret).unwrap().unwrap();
+                            let lock_key = LockKey {
+                                chain_id: 76,
+                                adapter_id: 02,
+                                hashed_secret: hashed_secret,
+                            };
+                            let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize()).unwrap().unwrap();
                             let mut buy_lock: BuyLock = bincode::deserialize(&result).unwrap();
                             println!("buy_lock: {:?}", buy_lock);
                             buy_lock.state = LockState::Unlocked;
-                            db.put_cf(&db.cf_handle("buy_lock").unwrap(), hashed_secret, bincode::serialize(&buy_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrder { order_id: hex::encode(buy_lock.order_id) } ).unwrap();
+                            db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(buy_lock.order_id) } ).unwrap();
                         }
                         if event.topics[0] == timeout_buy {
                         }

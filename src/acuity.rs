@@ -194,6 +194,8 @@ impl AcuityApi {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct AddToOrderEvent<T: AtomicSwap> {
     pub seller: <T as System>::AccountId,
+    pub chain_id: u32,
+    pub adapter_id: u32,
     pub asset_id: [u8; 16],
     pub price: u128,
     pub foreign_address: [u8; 32],
@@ -204,6 +206,8 @@ pub struct AddToOrderEvent<T: AtomicSwap> {
 #[derive(Debug, Decode, Eq, Event, PartialEq)]
 pub struct RemoveFromOrderEvent<T: AtomicSwap> {
     pub seller: <T as System>::AccountId,
+    pub chain_id: u32,
+    pub adapter_id: u32,
     pub asset_id: [u8; 16],
     pub price: u128,
     pub foreign_address: [u8; 32],
@@ -242,7 +246,8 @@ pub struct LockBuyEvent<T: AtomicSwap> {
     pub hashed_secret: [u8; 32],
     pub timeout: T::Moment,
     pub value: T::Balance,
-    pub asset_id: [u8; 16],
+    pub chain_id: u32,
+    pub adapter_id: u32,
     pub order_id: [u8; 16],
     pub foreign_address: [u8; 32],
 }
@@ -264,19 +269,29 @@ pub struct TimeoutBuyEvent<T: AtomicSwap> {
 
 async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRuntime>) {
     println!("order_id: {:?}", order_id);
-    let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
+    let order_key = OrderKey {
+        chain_id: 76,
+        adapter_id: 0,
+        order_id: order_id,
+    };
+    let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize()).unwrap();
     println!("order_value: {:?}", option);
 
     match option {
         Some(result) => {
             let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
             println!("old value: {:?}", value);
-            let value_order_id = ValueOrderId {
+            let key = OrderListKey {
+                sell_chain_id: 76,
+                sell_asset_id: <[u8; 8]>::default(),
+                buy_chain_id: 60,
+                buy_asset_id: <[u8; 8]>::default(),
                 value: value,
+                sell_adapter_id: 0,
                 order_id: order_id,
             };
             // Remove order from list.
-            db.delete_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize()).unwrap();
+            db.delete_cf(&db.cf_handle("order_list").unwrap(), key.serialize()).unwrap();
         }
         None => {},
     }
@@ -292,17 +307,22 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
             println!("new value: {:?}", new_value);
 
             // Add order back into list.
-            let value_order_id = ValueOrderId {
+            let key = OrderListKey {
+                sell_chain_id: 76,
+                sell_asset_id: <[u8; 8]>::default(),
+                buy_chain_id: 60,
+                buy_asset_id: <[u8; 8]>::default(),
                 value: new_value,
+                sell_adapter_id: 0,
                 order_id: order_id,
             };
-            db.put_cf(&db.cf_handle("order_list").unwrap(), value_order_id.serialize(), order_id).unwrap();
+            db.put_cf(&db.cf_handle("order_list").unwrap(), key.serialize(), order_id).unwrap();
 
             // Store new value
-            db.put_cf(&db.cf_handle("order_value").unwrap(), order_id, new_value.to_be_bytes()).unwrap();
+            db.put_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize(), new_value.to_be_bytes()).unwrap();
         }
         Err(_err) => {
-            db.delete_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
+            db.delete_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize()).unwrap();
         },
     }
 
@@ -353,10 +373,15 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         };
                         let order_id = order.get_order_id();
                         println!("order_id: {:?}", hex::encode(order_id));
-                        db.put_cf(&db.cf_handle("order_static").unwrap(), order_id, bincode::serialize(&order).unwrap()).unwrap();
+                        let order_key = OrderKey {
+                            chain_id: event.chain_id,
+                            adapter_id: event.adapter_id,
+                            order_id: order.get_order_id(),
+                        };
+                        db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
                         update_order(order_id, db.clone(), client.clone()).await;
-                        tx.send(RequestMessage::GetOrderBook).unwrap();
-                        tx.send(RequestMessage::GetOrder { order_id: hex::encode(order_id) } ).unwrap();
+                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: <[u8; 8]>::default(), buy_chain_id: 60, buy_asset_id: <[u8; 8]>::default() }).unwrap();
+                        tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                     },
                     "RemoveFromOrder" => {
                         let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
@@ -379,9 +404,14 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             timeout: event.timeout.into(),
                             secret: None,
                         };
-                        db.put_cf(&db.cf_handle("sell_lock").unwrap(), event.hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
+                        let lock_key = LockKey {
+                            chain_id: 76,
+                            adapter_id: 0,
+                            hashed_secret: event.hashed_secret,
+                        };
+                        db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
                         update_order(event.order_id, db.clone(), client.clone()).await;
-                        tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
+                        tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(event.order_id) } ).unwrap();
                     },
                     "UnlockSell" => {
                         let event = UnlockSellEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
@@ -401,8 +431,13 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                         sell_lock.state = LockState::Unlocked;
                         sell_lock.secret = Some(event.secret);
-                        db.put_cf(&db.cf_handle("sell_lock").unwrap(), hashed_secret, bincode::serialize(&sell_lock).unwrap()).unwrap();
-                        tx.send(RequestMessage::GetOrder { order_id: hex::encode(event.order_id) } ).unwrap();
+                        let lock_key = LockKey {
+                            chain_id: 76,
+                            adapter_id: 0,
+                            hashed_secret: hashed_secret,
+                        };
+                        db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
+                        tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(event.order_id) } ).unwrap();
                     },
                     "TimeoutSell" => {
                         let event = TimeoutSellEvent::decode(&mut &event.data[..]).unwrap();

@@ -48,22 +48,39 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
     println!("msg: {:?}", msg);
 
     match msg {
-        RequestMessage::GetOrderBook => {
+        RequestMessage::GetOrderBook { sell_chain_id, sell_asset_id, buy_chain_id, buy_asset_id } => {
             println!("getOrderBook");
-            let iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::Start);
-            let orders = iterator.collect::<Vec<_>>();
+            let start_key = OrderListKey {
+                sell_chain_id: sell_chain_id,
+                sell_asset_id: sell_asset_id,
+                buy_chain_id: buy_chain_id,
+                buy_asset_id: buy_asset_id,
+                value: u128::default(),
+                sell_adapter_id: u32::default(),
+                order_id: <[u8; 16]>::default(),
+            };
+
+            let iterator = db.iterator_cf(&db.cf_handle("order_list").unwrap(), IteratorMode::From(&start_key.serialize(), Direction::Forward));
+            let order_list_keys = iterator.collect::<Vec<_>>();
             let mut orderbook: Vec<JsonOrder> = Vec::new();
-            for order in orders {
-                println!("{:?}", order);
-                let order = ValueOrderId::unserialize(order.0.to_vec());
-                println!("{:?}", order);
-                let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order.order_id).unwrap().unwrap()).unwrap();
+            for order_list_key in order_list_keys {
+                println!("{:?}", order_list_key);
+                let order_list_key = OrderListKey::unserialize(order_list_key.0.to_vec());
+                println!("{:?}", order_list_key);
+
+                let order_key = OrderKey {
+                    chain_id: order_list_key.sell_chain_id,
+                    adapter_id: order_list_key.sell_adapter_id,
+                    order_id: order_list_key.order_id,
+                };
+
+                let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize()).unwrap().unwrap()).unwrap();
                 println!("{:?}", order_static);
 
                 orderbook.push(JsonOrder {
-                    order_id: hex::encode(order.order_id),
+                    order_id: hex::encode(order_list_key.order_id),
                     order_static: order_static,
-                    value: order.value,
+                    value: order_list_key.value,
                 });
             }
 
@@ -72,19 +89,24 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
             };
             serde_json::to_string(&response).unwrap()
         },
-        RequestMessage::GetOrder { order_id } => {
+        RequestMessage::GetOrder { sell_chain_id, sell_adapter_id, order_id } => {
             println!("getOrder");
 
             let order_id: [u8; 16] = vector_as_u8_16_array(&hex::decode(order_id).unwrap());
-
-            let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_id).unwrap();
+            let order_key = OrderKey {
+                chain_id: sell_chain_id,
+                adapter_id: sell_adapter_id,
+                order_id: vector_as_u8_16_array(&hex::decode(order_id).unwrap()),
+            };
+            let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize()).unwrap();
             println!("order_value: {:?}", option);
 
             match option {
                 Some(result) => {
                     let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
                     println!("value: {:?}", value);
-                    let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_id).unwrap().unwrap()).unwrap();
+
+                    let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize()).unwrap().unwrap()).unwrap();
                     println!("{:?}", order_static);
 
                     let order = JsonOrder {
@@ -93,20 +115,38 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                         value: value,
                     };
 
-                    let iterator = db.iterator_cf(&db.cf_handle("order_lock_list").unwrap(), IteratorMode::From(&order_id, Direction::Forward));
+                    let order_lock_list_key = OrderLockListKey {
+                        chain_id: sell_chain_id,
+                        adapter_id: sell_adapter_id,
+                        order_id: vector_as_u8_16_array(&hex::decode(order_id).unwrap()),
+                        value: u128::default(),
+                        hashed_secret: <[u8; 32]>::default(),
+                    };
+
+                    let iterator = db.iterator_cf(&db.cf_handle("order_lock_list").unwrap(), IteratorMode::From(&order_lock_list_key.serialize(), Direction::Forward));
                     let mut locks: Vec<JsonLock> = Vec::new();
 
                     for (key, _value) in iterator {
-                        let order_id_value_hashed_secret = OrderIdValueHashedSecret::unserialize(key.to_vec());
-                        if order_id_value_hashed_secret.order_id != order_id { break };
-                        println!("hashed_secret: {:?}", order_id_value_hashed_secret.hashed_secret);
+                        let order_lock_list_key = OrderLockListKey::unserialize(key.to_vec());
+                        if order_lock_list_key.order_id != vector_as_u8_16_array(&hex::decode(order_id).unwrap()) { break };
+                        println!("hashed_secret: {:?}", order_lock_list_key.hashed_secret);
 
-                        let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), order_id_value_hashed_secret.hashed_secret).unwrap().unwrap();
+                        let lock_key = LockKey {
+                            chain_id: 76,
+                            adapter_id: 02,
+                            hashed_secret: order_lock_list_key.hashed_secret,
+                        };
+
+                        let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize()).unwrap().unwrap();
                         let buy_lock: BuyLock = bincode::deserialize(&result).unwrap();
                         println!("buy_lock: {:?}", buy_lock);
 
-
-                        let sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), order_id_value_hashed_secret.hashed_secret).unwrap() {
+                        let lock_key = LockKey {
+                            chain_id: 76,
+                            adapter_id: 0,
+                            hashed_secret: order_lock_list_key.hashed_secret,
+                        };
+                        let sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize()).unwrap() {
                             Some(result) => bincode::deserialize(&result).unwrap(),
                             None => SellLock {
                                 timeout: 0,
@@ -119,7 +159,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
                         locks.push(JsonLock{
                             buyer: hex::encode(buy_lock.buyer),
-                            hashed_secret: hex::encode(order_id_value_hashed_secret.hashed_secret),
+                            hashed_secret: hex::encode(order_lock_list_key.hashed_secret),
                             buy_lock_value: buy_lock.value,
                             buy_lock_state: buy_lock.state.to_string(),
                             buy_lock_timeout: buy_lock.timeout,
