@@ -12,6 +12,9 @@ use websockets::websockets_listen;
 use acuity::acuity_listen;
 use ethereum::ethereum_listen;
 
+#[cfg(test)]
+mod tests;
+
 #[tokio::main]
 async fn main() {
     let mut db_opts = Options::default();
