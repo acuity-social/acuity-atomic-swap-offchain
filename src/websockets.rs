@@ -49,6 +49,8 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
     match msg {
         RequestMessage::GetOrderBook { sell_chain_id, sell_asset_id, buy_chain_id, buy_asset_id } => {
+            let sell_asset_id: [u8; 8] = vector_as_u8_8_array(&hex::decode(sell_asset_id).unwrap());
+            let buy_asset_id: [u8; 8] = vector_as_u8_8_array(&hex::decode(buy_asset_id).unwrap());
             println!("getOrderBook");
             let start_key = OrderListKey {
                 sell_chain_id: sell_chain_id,

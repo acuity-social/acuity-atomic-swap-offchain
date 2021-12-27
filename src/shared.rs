@@ -168,9 +168,9 @@ pub struct SellLock {
 pub enum RequestMessage {
     GetOrderBook {
         sell_chain_id: u32,
-        sell_asset_id: [u8; 8],
+        sell_asset_id: String,
         buy_chain_id: u32,
-        buy_asset_id: [u8; 8],
+        buy_asset_id: String,
     },
     GetOrder {
         sell_chain_id: u32,

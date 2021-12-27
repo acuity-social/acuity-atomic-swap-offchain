@@ -380,7 +380,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         };
                         db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
                         update_order(order_id, db.clone(), client.clone()).await;
-                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: <[u8; 8]>::default(), buy_chain_id: 60, buy_asset_id: <[u8; 8]>::default() }).unwrap();
+                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "".to_string(), buy_chain_id: 60, buy_asset_id: "".to_string() }).unwrap();
                         tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                     },
                     "RemoveFromOrder" => {
