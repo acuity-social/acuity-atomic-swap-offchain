@@ -110,7 +110,7 @@ impl fmt::Debug for OrderLockListKey {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize, Deserialize)]
 pub struct OrderStatic {
     pub seller: <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId,
-    pub asset_id: [u8; 16],
+    pub asset_id: [u8; 8],
     pub price: u128,
     pub foreign_address: [u8; 32],
 }
