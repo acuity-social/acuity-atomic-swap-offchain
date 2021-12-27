@@ -133,7 +133,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
                         let lock_key = LockKey {
                             chain_id: 76,
-                            adapter_id: 02,
+                            adapter_id: 0,
                             hashed_secret: order_lock_list_key.hashed_secret,
                         };
 
@@ -141,11 +141,6 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                         let buy_lock: BuyLock = bincode::deserialize(&result).unwrap();
                         println!("buy_lock: {:?}", buy_lock);
 
-                        let lock_key = LockKey {
-                            chain_id: 76,
-                            adapter_id: 0,
-                            hashed_secret: order_lock_list_key.hashed_secret,
-                        };
                         let sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize()).unwrap() {
                             Some(result) => bincode::deserialize(&result).unwrap(),
                             None => SellLock {

@@ -128,7 +128,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                             let lock_key = LockKey {
                                 chain_id: 76,
-                                adapter_id: 02,
+                                adapter_id: 0,
                                 hashed_secret: hashed_secret,
                             };
 
@@ -148,7 +148,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             let hashed_secret = keccak_256(&secret);
                             let lock_key = LockKey {
                                 chain_id: 76,
-                                adapter_id: 02,
+                                adapter_id: 0,
                                 hashed_secret: hashed_secret,
                             };
                             let result = db.get_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize()).unwrap().unwrap();
