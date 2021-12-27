@@ -98,7 +98,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
             let order_key = OrderKey {
                 chain_id: sell_chain_id,
                 adapter_id: sell_adapter_id,
-                order_id: vector_as_u8_16_array(&hex::decode(order_id).unwrap()),
+                order_id: order_id,
             };
             let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize()).unwrap();
             println!("order_value: {:?}", option);
@@ -120,7 +120,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                     let order_lock_list_key = OrderLockListKey {
                         chain_id: sell_chain_id,
                         adapter_id: sell_adapter_id,
-                        order_id: vector_as_u8_16_array(&hex::decode(order_id).unwrap()),
+                        order_id: order_id,
                         value: u128::default(),
                         hashed_secret: <[u8; 32]>::default(),
                     };
@@ -130,7 +130,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
                     for (key, _value) in iterator {
                         let order_lock_list_key = OrderLockListKey::unserialize(key.to_vec());
-                        if order_lock_list_key.order_id != vector_as_u8_16_array(&hex::decode(order_id).unwrap()) { break };
+                        if order_lock_list_key.order_id != order_id { break };
                         println!("hashed_secret: {:?}", order_lock_list_key.hashed_secret);
 
                         let lock_key = LockKey {

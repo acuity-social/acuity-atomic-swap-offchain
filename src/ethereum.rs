@@ -133,7 +133,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             };
 
                             db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "".to_string(), buy_chain_id: 60, buy_asset_id: "".to_string() }).unwrap();
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 60, buy_asset_id: "0000000000000000".to_string() }).unwrap();
                             tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_buy {

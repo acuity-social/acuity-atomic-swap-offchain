@@ -92,7 +92,7 @@ impl OrderLockListKey {
             adapter_id: u32::from_be_bytes(vector_as_u8_4_array(&vec[4..8].to_vec())),
             order_id: vector_as_u8_16_array(&vec[8..24].to_vec()),
             value: u128::from_be_bytes(vector_as_u8_16_array(&vec[24..40].to_vec())),
-            hashed_secret: vector_as_u8_32_array(&vec[72..104].to_vec()),
+            hashed_secret: vector_as_u8_32_array(&vec[40..72].to_vec()),
         }
     }
 }
@@ -110,6 +110,8 @@ impl fmt::Debug for OrderLockListKey {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize, Deserialize)]
 pub struct OrderStatic {
     pub seller: <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId,
+    pub chain_id: u32,
+    pub adapter_id: u32,
     pub asset_id: [u8; 8],
     pub price: u128,
     pub foreign_address: [u8; 32],
@@ -117,7 +119,7 @@ pub struct OrderStatic {
 
 impl OrderStatic {
     pub fn get_order_id(&self) -> [u8; 16] {
-        blake2_128(&[self.seller.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat())
+        blake2_128(&[self.seller.encode(), self.chain_id.encode(), self.adapter_id.encode(), self.asset_id.encode(), self.price.to_ne_bytes().to_vec(), self.foreign_address.encode()].concat())
     }
 }
 
