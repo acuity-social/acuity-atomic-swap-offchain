@@ -36,9 +36,15 @@ pub struct JsonLock {
 #[serde(rename_all = "camelCase")]
 enum JsonResponseMessage {
     OrderBook {
+        sell_chain_id: u32,
+        sell_asset_id: String,
+        buy_chain_id: u32,
+        buy_asset_id: String,
         order_book: Vec<JsonOrder>,
     },
     Order {
+        sell_chain_id: u32,
+        sell_adapter_id: u32,
         order: JsonOrder,
         locks: Vec<JsonLock>,
     },
@@ -49,14 +55,12 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
     match msg {
         RequestMessage::GetOrderBook { sell_chain_id, sell_asset_id, buy_chain_id, buy_asset_id } => {
-            let sell_asset_id: [u8; 8] = vector_as_u8_8_array(&hex::decode(sell_asset_id).unwrap());
-            let buy_asset_id: [u8; 8] = vector_as_u8_8_array(&hex::decode(buy_asset_id).unwrap());
             println!("getOrderBook");
             let start_key = OrderListKey {
                 sell_chain_id: sell_chain_id,
-                sell_asset_id: sell_asset_id,
+                sell_asset_id: vector_as_u8_8_array(&hex::decode(sell_asset_id.clone()).unwrap()),
                 buy_chain_id: buy_chain_id,
-                buy_asset_id: buy_asset_id,
+                buy_asset_id: vector_as_u8_8_array(&hex::decode(buy_asset_id.clone()).unwrap()),
                 value: u128::default(),
                 sell_adapter_id: u32::default(),
                 order_id: <[u8; 16]>::default(),
@@ -87,6 +91,10 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
             }
 
             let response = JsonResponseMessage::OrderBook {
+                sell_chain_id: sell_chain_id,
+                sell_asset_id: sell_asset_id,
+                buy_chain_id: buy_chain_id,
+                buy_asset_id: buy_asset_id,
                 order_book: orderbook,
             };
             serde_json::to_string(&response).unwrap()
@@ -171,6 +179,8 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                     }
 
                     let response = JsonResponseMessage::Order {
+                        sell_chain_id: sell_chain_id,
+                        sell_adapter_id: sell_adapter_id,
                         order: order,
                         locks: locks,
                     };
