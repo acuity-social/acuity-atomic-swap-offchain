@@ -376,8 +376,8 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         let order_id = order.get_order_id();
                         println!("order_id: {:?}", hex::encode(order_id));
                         let order_key = OrderKey {
-                            chain_id: event.chain_id,
-                            adapter_id: event.adapter_id,
+                            chain_id: 76,
+                            adapter_id: 0,
                             order_id: order.get_order_id(),
                         };
                         db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();

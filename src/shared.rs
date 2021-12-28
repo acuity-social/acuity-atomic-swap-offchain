@@ -15,8 +15,8 @@ use sp_io::hashing::blake2_128;
 use strum_macros::Display;
 
 pub struct OrderKey {
-    pub chain_id: u32,
-    pub adapter_id: u32,
+    pub chain_id: u32,      // selling chain
+    pub adapter_id: u32,    // selling adapter
     pub order_id: [u8; 16],
 }
 
@@ -37,6 +37,7 @@ pub struct OrderListKey {
     pub buy_chain_id: u32,
     pub buy_asset_id: [u8; 8],
     pub value: u128,
+
     pub sell_adapter_id: u32,
     pub order_id: [u8; 16],
 }
@@ -68,10 +69,11 @@ impl OrderListKey {
 }
 
 pub struct OrderLockListKey {
-    pub chain_id: u32,
-    pub adapter_id: u32,
+    pub chain_id: u32,      // selling chain
+    pub adapter_id: u32,    // selling adapter
     pub order_id: [u8; 16],
     pub value: u128,
+
     pub hashed_secret: [u8; 32],
 }
 
@@ -110,9 +112,9 @@ impl fmt::Debug for OrderLockListKey {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize, Deserialize)]
 pub struct OrderStatic {
     pub seller: <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId,
-    pub chain_id: u32,
-    pub adapter_id: u32,
-    pub asset_id: [u8; 8],
+    pub chain_id: u32,          // buying chain
+    pub adapter_id: u32,        // buying adapter
+    pub asset_id: [u8; 8],      // buying asset
     pub price: u128,
     pub foreign_address: [u8; 32],
 }
@@ -133,8 +135,8 @@ pub enum LockState {
 }
 
 pub struct LockKey {
-    pub chain_id: u32,
-    pub adapter_id: u32,
+    pub chain_id: u32,      // selling chain
+    pub adapter_id: u32,    // selling adapter
     pub hashed_secret: [u8; 32],
 }
 
