@@ -11,6 +11,50 @@ use sp_io::hashing::keccak_256;
 
 use crate::shared::*;
 
+async fn update_order(order_id: [u8; 16], new_value: u128, db: Arc<DB>) {
+    println!("order_id: {:?}", order_id);
+    let order_key = OrderKey {
+        chain_id: 60,
+        adapter_id: 0,
+        order_id: order_id,
+    };
+    let option = db.get_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize()).unwrap();
+    println!("order_value: {:?}", option);
+
+    match option {
+        Some(result) => {
+            let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
+            println!("old value: {:?}", value);
+            let key = OrderListKey {
+                sell_chain_id: 60,
+                sell_asset_id: <[u8; 8]>::default(),
+                buy_chain_id: 76,
+                buy_asset_id: <[u8; 8]>::default(),
+                value: value,
+                sell_adapter_id: 0,
+                order_id: order_id,
+            };
+            // Remove order from list.
+            db.delete_cf(&db.cf_handle("order_list").unwrap(), key.serialize()).unwrap();
+        }
+        None => {},
+    }
+    // Add order back into list.
+    let key = OrderListKey {
+        sell_chain_id: 60,
+        sell_asset_id: <[u8; 8]>::default(),
+        buy_chain_id: 76,
+        buy_asset_id: <[u8; 8]>::default(),
+        value: new_value,
+        sell_adapter_id: 0,
+        order_id: order_id,
+    };
+    db.put_cf(&db.cf_handle("order_list").unwrap(), key.serialize(), order_id).unwrap();
+
+    // Store new value
+    db.put_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize(), new_value.to_be_bytes()).unwrap();
+}
+
 pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 //    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
     let ws = web3::transports::WebSocket::new("ws:/127.0.0.1:8546").await.unwrap();
@@ -51,21 +95,37 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                         if event.topics[0] == add_to_order {
                             println!("AddToOrder: {:?}", hex::encode(&event.data.0));
-//                            event AddToOrder(address seller, bytes32 assetIdPrice, bytes32 foreignAddress, uint256 value);
-                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 16);
-                            let seller = vector_as_u8_20_array_offset(&event.data.0, 44);
-//                            let chain_id = U32::from(vector_as_u8_4_array_offset(&event.data.0, 64)).as_u32();
-//                            let adapter_id = U32::from(vector_as_u8_4_array_offset(&event.data.0, 68)).as_u32();
-                            let asset_id = vector_as_u8_8_array_offset(&event.data.0, 68);
-                            let price = U128::from(vector_as_u8_16_array_offset(&event.data.0, 76)).as_u128();
+                            let order_id = vector_as_u8_16_array(&event.data.0);
+                            let seller = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            let chain_id = 76;
+                            let adapter_id = 0;
+                            let asset_id = <[u8; 8]>::default();
+                            let price = U128::from(vector_as_u8_16_array_offset(&event.data.0, 80)).as_u128();
                             let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 96);
                             let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
                             println!("order_id: {:?}", hex::encode(&order_id));
                             println!("seller: {:?}", hex::encode(&seller));
-                            println!("asset_id: {:?}", hex::encode(&asset_id));
                             println!("price: {:?}", price);
                             println!("foreign_address: {:?}", hex::encode(&foreign_address));
                             println!("value: {:?}", value);
+
+                            let order = OrderStatic {
+                                seller: seller,
+                                chain_id: chain_id,
+                                adapter_id: adapter_id,
+                                asset_id: asset_id,
+                                price: price,
+                                foreign_address: foreign_address,
+                            };
+                            let order_key = OrderKey {
+                                chain_id: 60,
+                                adapter_id: 0,
+                                order_id: order_id,
+                            };
+                            db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
+                            update_order(order_id, value, db.clone()).await;
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 60, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                         }
                         if event.topics[0] == remove_from_order {
                             println!("RemoveFromOrder: {:?}", hex::encode(&event.data.0));
