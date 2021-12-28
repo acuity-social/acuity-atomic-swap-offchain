@@ -40,6 +40,7 @@ pub struct JsonLock {
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 enum JsonResponseMessage {
+    #[serde(rename_all = "camelCase")]
     OrderBook {
         sell_chain_id: u32,
         sell_asset_id: String,
@@ -47,6 +48,7 @@ enum JsonResponseMessage {
         buy_asset_id: String,
         order_book: Vec<JsonOrder>,
     },
+    #[serde(rename_all = "camelCase")]
     Order {
         sell_chain_id: u32,
         sell_adapter_id: u32,
@@ -77,6 +79,8 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
             for order_list_key in order_list_keys {
                 println!("{:?}", order_list_key);
                 let order_list_key = OrderListKey::unserialize(order_list_key.0.to_vec());
+                if order_list_key.sell_chain_id != sell_chain_id { break };
+
                 println!("{:?}", order_list_key);
 
                 let order_key = OrderKey {
