@@ -366,8 +366,8 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         let event = AddToOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("AddToOrderEvent: {:?}", event);
                         let order = OrderStatic {
-                            seller: event.seller,
-                            chain_id :event.chain_id,
+                            seller: *event.seller.as_ref(),
+                            chain_id: event.chain_id,
                             adapter_id: event.adapter_id,
                             asset_id: event.asset_id,
                             price: event.price,
@@ -389,7 +389,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         let event = RemoveFromOrderEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("RemoveFromOrderEvent: {:?}", event);
                         let order = OrderStatic {
-                            seller: event.seller,
+                            seller: *event.seller.as_ref(),
                             chain_id :event.chain_id,
                             adapter_id: event.adapter_id,
                             asset_id: event.asset_id,

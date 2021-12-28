@@ -4,13 +4,6 @@ use codec::{
     Encode,
 };
 use serde::{Serialize, Deserialize};
-use sp_runtime::{
-    traits::{
-        IdentifyAccount,
-        Verify,
-    },
-    MultiSignature,
-};
 use sp_io::hashing::blake2_128;
 use strum_macros::Display;
 
@@ -111,7 +104,7 @@ impl fmt::Debug for OrderLockListKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Default, Serialize, Deserialize)]
 pub struct OrderStatic {
-    pub seller: <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId,
+    pub seller: [u8; 32],
     pub chain_id: u32,          // buying chain
     pub adapter_id: u32,        // buying adapter
     pub asset_id: [u8; 8],      // buying asset

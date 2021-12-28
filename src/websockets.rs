@@ -13,7 +13,12 @@ use crate::shared::*;
 #[serde(rename_all = "camelCase")]
 struct JsonOrder {
     order_id: String,
-    order_static: OrderStatic,
+    seller: String,
+    chain_id: u32,          // buying chain
+    adapter_id: u32,        // buying adapter
+    asset_id: String,      // buying asset
+    price: u128,
+    foreign_address: String,
     value: u128,
 }
 
@@ -85,7 +90,12 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
                 orderbook.push(JsonOrder {
                     order_id: hex::encode(order_list_key.order_id),
-                    order_static: order_static,
+                    seller: hex::encode(order_static.seller),
+                    chain_id: order_static.chain_id,
+                    adapter_id: order_static.adapter_id,
+                    asset_id: hex::encode(order_static.asset_id),
+                    price: order_static.price,
+                    foreign_address: hex::encode(order_static.foreign_address),
                     value: order_list_key.value,
                 });
             }
@@ -121,7 +131,12 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
                     let order = JsonOrder {
                         order_id: hex::encode(order_id),
-                        order_static: order_static,
+                        seller: hex::encode(order_static.seller),
+                        chain_id: order_static.chain_id,
+                        adapter_id: order_static.adapter_id,
+                        asset_id: hex::encode(order_static.asset_id),
+                        price: order_static.price,
+                        foreign_address: hex::encode(order_static.foreign_address),
                         value: value,
                     };
 
