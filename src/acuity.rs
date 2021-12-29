@@ -450,6 +450,37 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                     "LockBuy" => {
                         let event = LockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("LockBuyEvent: {:?}", event);
+
+                        let order_lock_list_key = OrderLockListKey {
+                            chain_id: 60,
+                            adapter_id: 0,
+                            order_id: event.order_id,
+                            value: event.value,
+                            hashed_secret: event.hashed_secret,
+                        };
+
+                        println!("{:?}", order_lock_list_key);
+
+                        db.put_cf(&db.cf_handle("order_lock_list").unwrap(), order_lock_list_key.serialize(), event.hashed_secret).unwrap();
+
+                        let lock_key = LockKey {
+                            chain_id: 60,
+                            adapter_id: 0,
+                            hashed_secret: event.hashed_secret,
+                        };
+
+                        let buy_lock = BuyLock {
+                            order_id: event.order_id,
+                            value: event.value,
+                            timeout: event.timeout.into(),
+                            buyer: *event.buyer.as_ref(),
+                            foreign_address: event.foreign_address,
+                            state: LockState::Locked,
+                        };
+
+                        db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
+                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 60, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                        tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(event.order_id) } ).unwrap();
                     },
                     "UnlockBuy" => {
                         let event = UnlockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();

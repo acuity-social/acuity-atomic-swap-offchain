@@ -161,8 +161,8 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                         println!("hashed_secret: {:?}", order_lock_list_key.hashed_secret);
 
                         let lock_key = LockKey {
-                            chain_id: 76,
-                            adapter_id: 0,
+                            chain_id: sell_chain_id,
+                            adapter_id: sell_adapter_id,
                             hashed_secret: order_lock_list_key.hashed_secret,
                         };
 
