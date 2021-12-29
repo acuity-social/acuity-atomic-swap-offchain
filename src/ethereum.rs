@@ -155,14 +155,18 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 64);
                             let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
                             let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
-                            let asset_id = vector_as_u8_16_array_offset(&event.data.0, 160);
-                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 176);
+//                            let chain_id = vector_as_u8_16_array_offset(&event.data.0, 160);
+//                            let adapter_id = vector_as_u8_16_array_offset(&event.data.0, 160);
+                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 168);
                             let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 192);
-                            println!("asset_id: {:?}", hex::encode(&asset_id));
-                            println!("seller: {:?}", hex::encode(&seller));
-                            println!("value: {:?}", value);
-                            println!("timeout: {:?}", timeout);
                             println!("buyer: {:?}", hex::encode(&buyer));
+                            println!("seller: {:?}", hex::encode(&seller));
+                            println!("hashed_secret: {:?}", hex::encode(&hashed_secret));
+                            println!("timeout: {:?}", timeout);
+                            println!("value: {:?}", value);
+//                            println!("chain_id: {:?}", &chain_id);
+//                            println!("adapter_id: {:?}", &adapter_id);
+                            println!("order_id: {:?}", hex::encode(&order_id));
                             println!("foreign_address: {:?}", hex::encode(&foreign_address));
 
                             let order_lock_list_key = OrderLockListKey {
