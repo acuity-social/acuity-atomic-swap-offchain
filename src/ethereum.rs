@@ -11,7 +11,7 @@ use sp_io::hashing::keccak_256;
 
 use crate::shared::*;
 
-async fn update_order(order_id: [u8; 16], new_value: u128, db: Arc<DB>) {
+async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) {
     println!("order_id: {:?}", order_id);
     let order_key = OrderKey {
         chain_id: 60,
@@ -39,20 +39,29 @@ async fn update_order(order_id: [u8; 16], new_value: u128, db: Arc<DB>) {
         }
         None => {},
     }
-    // Add order back into list.
-    let key = OrderListKey {
-        sell_chain_id: 60,
-        sell_asset_id: <[u8; 8]>::default(),
-        buy_chain_id: 76,
-        buy_asset_id: <[u8; 8]>::default(),
-        value: new_value,
-        sell_adapter_id: 0,
-        order_id: order_id,
-    };
-    db.put_cf(&db.cf_handle("order_list").unwrap(), key.serialize(), order_id).unwrap();
 
-    // Store new value
-    db.put_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize(), new_value.to_be_bytes()).unwrap();
+    match new_value {
+        Some(new_value) => {
+            println!("new value: {:?}", new_value);
+
+            // Add order back into list.
+            let key = OrderListKey {
+                sell_chain_id: 60,
+                sell_asset_id: <[u8; 8]>::default(),
+                buy_chain_id: 76,
+                buy_asset_id: <[u8; 8]>::default(),
+                value: new_value,
+                sell_adapter_id: 0,
+                order_id: order_id,
+            };
+            db.put_cf(&db.cf_handle("order_list").unwrap(), key.serialize(), order_id).unwrap();
+
+            // Store new value
+            db.put_cf(&db.cf_handle("order_value").unwrap(), order_key.serialize(), new_value.to_be_bytes()).unwrap();
+        }
+        None => {}
+    }
+
 }
 
 pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
@@ -123,7 +132,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 order_id: order_id,
                             };
                             db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
-                            update_order(order_id, value, db.clone()).await;
+                            update_order(order_id, db.clone(), Some(value)).await;
                             tx.send(RequestMessage::GetOrderBook { sell_chain_id: 60, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
                             tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                         }
@@ -134,6 +143,28 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         if event.topics[0] == lock_sell {
                             println!("LockSell: {:?}", hex::encode(&event.data.0));
 //                            event LockSell(bytes16 orderId, bytes32 hashedSecret, uint256 timeout, uint256 value);
+                            let order_id = vector_as_u8_16_array(&event.data.0);
+                            let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 80)).as_u128();
+                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
+                            println!("order_id: {:?}", hex::encode(&order_id));
+                            println!("hashed_secret: {:?}", hex::encode(&hashed_secret));
+                            println!("timeout: {:?}", timeout);
+                            println!("value: {:?}", value);
+
+                            let sell_lock = SellLock {
+                                state: LockState::Locked,
+                                timeout: timeout,
+                                secret: None,
+                            };
+                            let lock_key = LockKey {
+                                chain_id: 60,
+                                adapter_id: 0,
+                                hashed_secret: hashed_secret,
+                            };
+                            db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
+                            update_order(order_id, db.clone(), None).await;
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_sell {
                             println!("UnlockSell: {:?}", hex::encode(&event.data.0));
