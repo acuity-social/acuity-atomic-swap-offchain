@@ -169,6 +169,33 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         if event.topics[0] == unlock_sell {
                             println!("UnlockSell: {:?}", hex::encode(&event.data.0));
 //                            event UnlockSell(bytes16 orderId, bytes32 secret, address buyer);
+                            let order_id = vector_as_u8_16_array(&event.data.0);
+                            let secret = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            println!("order_id: {:?}", hex::encode(&order_id));
+                            println!("secret: {:?}", hex::encode(&secret));
+
+                            let hashed_secret = keccak_256(&secret);
+
+                            let mut sell_lock: SellLock = match db.get_cf(&db.cf_handle("sell_lock").unwrap(), hashed_secret).unwrap() {
+                                Some(result) => bincode::deserialize(&result).unwrap(),
+                                None => SellLock {
+                                    timeout: 0,
+                                    state: LockState::NotLocked,
+                                    secret: None,
+                                }
+                            };
+
+                            println!("sell_lock: {:?}", sell_lock);
+
+                            sell_lock.state = LockState::Unlocked;
+                            sell_lock.secret = Some(secret);
+                            let lock_key = LockKey {
+                                chain_id: 60,
+                                adapter_id: 0,
+                                hashed_secret: hashed_secret,
+                            };
+                            db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == timeout_sell {
                             println!("TimeoutSell: {:?}", hex::encode(&event.data.0));
@@ -235,10 +262,8 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             println!("UnlockBuy: {:?}", hex::encode(&event.data.0));
                             let buyer = vector_as_u8_32_array(&event.data.0);
                             let secret = vector_as_u8_32_array_offset(&event.data.0, 32);
-                            let seller = vector_as_u8_20_array_offset(&event.data.0, 76);
                             println!("buyer: {:?}", hex::encode(&buyer));
                             println!("secret: {:?}", hex::encode(&secret));
-                            println!("seller: {:?}", hex::encode(&seller));
 
                             let hashed_secret = keccak_256(&secret);
                             let lock_key = LockKey {
