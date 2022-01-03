@@ -163,7 +163,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 hashed_secret: hashed_secret,
                             };
                             db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
-                            update_order(order_id, db.clone(), None).await;
+//                            update_order(order_id, db.clone(), None).await;
                             tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_sell {
