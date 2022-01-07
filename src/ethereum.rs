@@ -14,7 +14,7 @@ use crate::shared::*;
 async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) {
     println!("order_id: {:?}", order_id);
     let order_key = OrderKey {
-        chain_id: 60,
+        chain_id: 9001,
         adapter_id: 0,
         order_id: order_id,
     };
@@ -26,7 +26,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) 
             let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
             println!("old value: {:?}", value);
             let key = OrderListKey {
-                sell_chain_id: 60,
+                sell_chain_id: 9001,
                 sell_asset_id: <[u8; 8]>::default(),
                 buy_chain_id: 76,
                 buy_asset_id: <[u8; 8]>::default(),
@@ -46,7 +46,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) 
 
             // Add order back into list.
             let key = OrderListKey {
-                sell_chain_id: 60,
+                sell_chain_id: 9001,
                 sell_asset_id: <[u8; 8]>::default(),
                 buy_chain_id: 76,
                 buy_asset_id: <[u8; 8]>::default(),
@@ -129,14 +129,14 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 foreign_address: foreign_address,
                             };
                             let order_key = OrderKey {
-                                chain_id: 60,
+                                chain_id: 9001,
                                 adapter_id: 0,
                                 order_id: order_id,
                             };
                             db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
                             update_order(order_id, db.clone(), Some(value)).await;
-                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 60, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
-                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 9001, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 9001, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                         }
                         if event.topics[0] == remove_from_order {
                             println!("RemoveFromOrder: {:?}", hex::encode(&event.data.0));
@@ -160,13 +160,13 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                                 secret: None,
                             };
                             let lock_key = LockKey {
-                                chain_id: 60,
+                                chain_id: 9001,
                                 adapter_id: 0,
                                 hashed_secret: hashed_secret,
                             };
                             db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
 //                            update_order(order_id, db.clone(), None).await;
-                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 9001, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_sell {
                             println!("UnlockSell: {:?}", hex::encode(&event.data.0));
@@ -192,12 +192,12 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             sell_lock.state = LockState::Unlocked;
                             sell_lock.secret = Some(secret);
                             let lock_key = LockKey {
-                                chain_id: 60,
+                                chain_id: 9001,
                                 adapter_id: 0,
                                 hashed_secret: hashed_secret,
                             };
                             db.put_cf(&db.cf_handle("sell_lock").unwrap(), lock_key.serialize(), bincode::serialize(&sell_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 9001, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == timeout_sell {
                             println!("TimeoutSell: {:?}", hex::encode(&event.data.0));
@@ -215,8 +215,8 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 64);
                             let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
                             let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
-//                            let chain_id = vector_as_u8_16_array_offset(&event.data.0, 160);
-//                            let adapter_id = vector_as_u8_16_array_offset(&event.data.0, 160);
+//                            let chain_id = vector_as_u8_16_array_offset(&event.data.0, 19001);
+//                            let adapter_id = vector_as_u8_16_array_offset(&event.data.0, 19001);
                             let order_id = vector_as_u8_16_array_offset(&event.data.0, 168);
                             let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 192);
                             println!("buyer: {:?}", hex::encode(&buyer));
@@ -257,7 +257,7 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             };
 
                             db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 60, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 9001, buy_asset_id: "0000000000000000".to_string() }).unwrap();
                             tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_buy {

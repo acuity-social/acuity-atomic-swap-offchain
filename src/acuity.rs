@@ -284,7 +284,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
             let key = OrderListKey {
                 sell_chain_id: 76,
                 sell_asset_id: <[u8; 8]>::default(),
-                buy_chain_id: 60,
+                buy_chain_id: 9001,
                 buy_asset_id: <[u8; 8]>::default(),
                 value: value,
                 sell_adapter_id: 0,
@@ -310,7 +310,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
             let key = OrderListKey {
                 sell_chain_id: 76,
                 sell_asset_id: <[u8; 8]>::default(),
-                buy_chain_id: 60,
+                buy_chain_id: 9001,
                 buy_asset_id: <[u8; 8]>::default(),
                 value: new_value,
                 sell_adapter_id: 0,
@@ -385,7 +385,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         };
                         db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
                         update_order(order_id, db.clone(), client.clone()).await;
-                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 60, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 9001, buy_asset_id: "0000000000000000".to_string() }).unwrap();
                         tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                     },
                     "RemoveFromOrder" => {
@@ -455,7 +455,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         println!("LockBuyEvent: {:?}", event);
 
                         let order_lock_list_key = OrderLockListKey {
-                            chain_id: 60,
+                            chain_id: 9001,
                             adapter_id: 0,
                             order_id: event.order_id,
                             value: event.value,
@@ -467,7 +467,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         db.put_cf(&db.cf_handle("order_lock_list").unwrap(), order_lock_list_key.serialize(), event.hashed_secret).unwrap();
 
                         let lock_key = LockKey {
-                            chain_id: 60,
+                            chain_id: 9001,
                             adapter_id: 0,
                             hashed_secret: event.hashed_secret,
                         };
@@ -482,15 +482,15 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         };
 
                         db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
-                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 60, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
-                        tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(event.order_id) } ).unwrap();
+                        tx.send(RequestMessage::GetOrderBook { sell_chain_id: 9001, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                        tx.send(RequestMessage::GetOrder { sell_chain_id: 9001, sell_adapter_id: 0, order_id: hex::encode(event.order_id) } ).unwrap();
                     },
                     "UnlockBuy" => {
                         let event = UnlockBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();
                         println!("UnlockBuyEvent: {:?}", event);
 
                         let lock_key = LockKey {
-                            chain_id: 60,
+                            chain_id: 9001,
                             adapter_id: 0,
                             hashed_secret: event.hashed_secret,
                         };
@@ -499,7 +499,7 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         println!("buy_lock: {:?}", buy_lock);
                         buy_lock.state = LockState::Unlocked;
                         db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
-                        tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(buy_lock.order_id) } ).unwrap();
+                        tx.send(RequestMessage::GetOrder { sell_chain_id: 9001, sell_adapter_id: 0, order_id: hex::encode(buy_lock.order_id) } ).unwrap();
                     },
                     "TimeoutBuy" => {
                         let event = TimeoutBuyEvent::<AcuityRuntime>::decode(&mut &event.data[..]).unwrap();

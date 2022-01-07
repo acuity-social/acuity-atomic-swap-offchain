@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 use rocksdb::DB;
-use web3::futures::StreamExt;
+use web3::futures::{future, StreamExt};
 use web3::contract::Contract;
 use web3::types::{Address, FilterBuilder, U128};
 use tokio::sync::broadcast::Sender;
@@ -28,7 +28,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) 
             let key = OrderListKey {
                 sell_chain_id: 9001,
                 sell_asset_id: <[u8; 8]>::default(),
-                buy_chain_id: 60,
+                buy_chain_id: 76,
                 buy_asset_id: <[u8; 8]>::default(),
                 value: value,
                 sell_adapter_id: 0,
@@ -48,7 +48,7 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) 
             let key = OrderListKey {
                 sell_chain_id: 9001,
                 sell_asset_id: <[u8; 8]>::default(),
-                buy_chain_id: 60,
+                buy_chain_id: 76,
                 buy_asset_id: <[u8; 8]>::default(),
                 value: new_value,
                 sell_adapter_id: 0,
@@ -65,8 +65,9 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) 
 }
 
 pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
-//    let ws = web3::transports::WebSocket::new("wss://mainnet.infura.io/ws/v3/9aa3d95b3bc440fa88ea12eaa4456161").await.unwrap();
-    let ws = web3::transports::WebSocket::new("wss://arb1.arbitrum.io/ws").await.unwrap();
+//    let ws = web3::transports::WebSocket::new("wss://arb1.arbitrum.io/ws").await.unwrap();
+//    let ws = web3::transports::WebSocket::new("ws://localhost:8548/ws").await.unwrap();
+    let ws = web3::transports::WebSocket::new("wss://rinkeby.arbitrum.io/ws").await.unwrap();
     let web3 = web3::Web3::new(ws);
 
     println!("Connected to Arbitrum.");
@@ -97,18 +98,19 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
         match raw {
             Some(event) => {
                 let event = event.unwrap();
+                println!("event: {:?}", event);
 //                println!("address: {:?}", hex::encode(&event.address));
 
                 match hex::encode(event.address).as_str() {
                     // Sell contract
-                    "d05647dd9d7b17abeba953fbf2dc8d8e87c19cb3" => {
+                    "744ac7bbcfdda8fdb41cf55c020d62f2109887a5" => {
                         println!("sell event: {:?}", event);
 
                         if event.topics[0] == add_to_order {
                             println!("AddToOrder: {:?}", hex::encode(&event.data.0));
                             let order_id = vector_as_u8_16_array(&event.data.0);
                             let seller = vector_as_u8_32_array_offset(&event.data.0, 32);
-                            let chain_id = 60;
+                            let chain_id = 76;
                             let adapter_id = 0;
                             let asset_id = <[u8; 8]>::default();
                             let price = U128::from(vector_as_u8_16_array_offset(&event.data.0, 80)).as_u128();
@@ -135,7 +137,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             };
                             db.put_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize(), bincode::serialize(&order).unwrap()).unwrap();
                             update_order(order_id, db.clone(), Some(value)).await;
-                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 9001, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 60, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 9001, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 76, buy_asset_id: "0000000000000000".to_string() }).unwrap();
                             tx.send(RequestMessage::GetOrder { sell_chain_id: 9001, sell_adapter_id: 0, order_id: hex::encode(order_id) }).unwrap();
                         }
                         if event.topics[0] == remove_from_order {
@@ -205,7 +207,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         }
                     },
                     // Buy contract
-                    "744ac7bbcfdda8fdb41cf55c020d62f2109887a5" => {
+                    "d05647dd9d7b17abeba953fbf2dc8d8e87c19cb3" => {
                         println!("buy event: {:?}", event);
 
                         if event.topics[0] == lock_buy {
@@ -230,7 +232,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             println!("foreign_address: {:?}", hex::encode(&foreign_address));
 
                             let order_lock_list_key = OrderLockListKey {
-                                chain_id: 60,
+                                chain_id: 76,
                                 adapter_id: 0,
                                 order_id: order_id,
                                 value: value,
@@ -251,14 +253,14 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             db.put_cf(&db.cf_handle("order_lock_list").unwrap(), order_lock_list_key.serialize(), hashed_secret).unwrap();
 
                             let lock_key = LockKey {
-                                chain_id: 60,
+                                chain_id: 76,
                                 adapter_id: 0,
                                 hashed_secret: hashed_secret,
                             };
 
                             db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 60, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 9001, buy_asset_id: "0000000000000000".to_string() }).unwrap();
-                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
+                            tx.send(RequestMessage::GetOrderBook { sell_chain_id: 76, sell_asset_id: "0000000000000000".to_string(), buy_chain_id: 9001, buy_asset_id: "0000000000000000".to_string() }).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(order_id) } ).unwrap();
                         }
                         if event.topics[0] == unlock_buy {
                             println!("UnlockBuy: {:?}", hex::encode(&event.data.0));
@@ -269,7 +271,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                             let hashed_secret = keccak_256(&secret);
                             let lock_key = LockKey {
-                                chain_id: 60,
+                                chain_id: 76,
                                 adapter_id: 0,
                                 hashed_secret: hashed_secret,
                             };
@@ -278,7 +280,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                             println!("buy_lock: {:?}", buy_lock);
                             buy_lock.state = LockState::Unlocked;
                             db.put_cf(&db.cf_handle("buy_lock").unwrap(), lock_key.serialize(), bincode::serialize(&buy_lock).unwrap()).unwrap();
-                            tx.send(RequestMessage::GetOrder { sell_chain_id: 60, sell_adapter_id: 0, order_id: hex::encode(buy_lock.order_id) } ).unwrap();
+                            tx.send(RequestMessage::GetOrder { sell_chain_id: 76, sell_adapter_id: 0, order_id: hex::encode(buy_lock.order_id) } ).unwrap();
                         }
                         if event.topics[0] == timeout_buy {
                         }
