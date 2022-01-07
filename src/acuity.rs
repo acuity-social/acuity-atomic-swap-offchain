@@ -349,6 +349,9 @@ pub async fn acuity_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
         .skip_type_sizes_check()
         .build().await.unwrap();
 
+    println!("Connected to Acuity.");
+
+
     let sub = client.subscribe_events().await.unwrap();
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::<AcuityRuntime>::new(sub, decoder);

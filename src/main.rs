@@ -7,10 +7,12 @@ mod shared;
 mod websockets;
 mod acuity;
 mod ethereum;
+mod arbitrum;
 
 use websockets::websockets_listen;
 use acuity::acuity_listen;
 use ethereum::ethereum_listen;
+use arbitrum::arbitrum_listen;
 
 #[cfg(test)]
 mod tests;
@@ -34,8 +36,10 @@ async fn main() {
     let acuity_task = tokio::spawn(acuity_listen(db.clone(), tx.clone()));
     // Spawn Ethereum task.
     let ethereum_task = tokio::spawn(ethereum_listen(db.clone(), tx.clone()));
+    // Spawn Ethereum task.
+    let arbitrum_task = tokio::spawn(arbitrum_listen(db.clone(), tx.clone()));
     // Spawn websockets task.
     let websockets_task = tokio::spawn(websockets_listen(db.clone(), tx));
     // Wait to exit.
-    let _result = join!(websockets_task, acuity_task, ethereum_task);
+    let _result = join!(websockets_task, acuity_task, arbitrum_task, ethereum_task);
 }
