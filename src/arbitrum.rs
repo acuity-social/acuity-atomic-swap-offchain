@@ -71,7 +71,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
     println!("Connected to Arbitrum.");
 
-    let sell_addr = Address::from_str("0xd05647dd9D7B17aBEBa953fbF2dc8D8e87c19cb3").unwrap();
+    let sell_addr = Address::from_str("0x744Ac7bbcFDDA8fdb41cF55c020d62f2109887A5").unwrap();
     let sell_contract = Contract::from_json(web3.eth(), sell_addr, include_bytes!("AcuityAtomicSwapSell.abi")).unwrap();
     let add_to_order = sell_contract.abi().event("AddToOrder").unwrap().signature();
     let remove_from_order = sell_contract.abi().event("RemoveFromOrder").unwrap().signature();
@@ -79,7 +79,7 @@ pub async fn arbitrum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
     let unlock_sell = sell_contract.abi().event("UnlockSell").unwrap().signature();
     let timeout_sell = sell_contract.abi().event("TimeoutSell").unwrap().signature();
 
-    let buy_addr = Address::from_str("0x744Ac7bbcFDDA8fdb41cF55c020d62f2109887A5").unwrap();
+    let buy_addr = Address::from_str("0xd05647dd9D7B17aBEBa953fbF2dc8D8e87c19cb3").unwrap();
     let buy_contract = Contract::from_json(web3.eth(), buy_addr, include_bytes!("AcuityAtomicSwapBuy.abi")).unwrap();
     let lock_buy = buy_contract.abi().event("LockBuy").unwrap().signature();
     let unlock_buy = buy_contract.abi().event("UnlockBuy").unwrap().signature();
