@@ -279,7 +279,9 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, client: Client::<AcuityRu
 
     match option {
         Some(result) => {
-            let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
+            let mut result_array: [u8; 16] = [0; 16];
+            result_array.clone_from_slice(&result[..16]);
+            let value = u128::from_be_bytes(result_array);
             println!("old value: {:?}", value);
             let key = OrderListKey {
                 sell_chain_id: 76,
