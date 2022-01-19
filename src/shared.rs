@@ -184,14 +184,6 @@ pub fn array_to_vec(arr: &[u8]) -> Vec<u8> {
      vector
 }
 
-pub fn vector_as_u8_32_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 32] {
-    let mut arr = [0u8; 32];
-    for i in 0..32 {
-        arr[i] = vector[offset + i];
-    }
-    arr
-}
-
 pub fn vector_as_u8_32_array(vector: &Vec<u8>) -> [u8; 32] {
     let mut arr = [0u8; 32];
     for i in 0..32 {
@@ -200,35 +192,10 @@ pub fn vector_as_u8_32_array(vector: &Vec<u8>) -> [u8; 32] {
     arr
 }
 
-pub fn vector_as_u8_20_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 20] {
-    let mut arr = [0u8; 20];
-    for i in 0..20 {
-        arr[i] = vector[offset + i];
-    }
-    arr
-}
-
-pub fn vector_as_u8_16_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 16] {
-    let mut arr = [0u8; 16];
-    for i in 0..16 {
-        arr[i] = vector[offset + i];
-    }
-    arr
-}
-
 pub fn vector_as_u8_16_array(vector: &Vec<u8>) -> [u8; 16] {
     let mut arr = [0u8; 16];
     for i in 0..16 {
         arr[i] = vector[i];
-    }
-    arr
-}
-
-
-pub fn vector_as_u8_8_array_offset(vector: &Vec<u8>, offset: usize) -> [u8; 8] {
-    let mut arr = [0u8; 8];
-    for i in 0..8 {
-        arr[i] = vector[offset + i];
     }
     arr
 }
