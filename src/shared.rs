@@ -4,9 +4,11 @@ use codec::{
     Encode,
 };
 use serde::{Serialize, Deserialize};
+use bincode::Options;
 use sp_io::hashing::blake2_128;
 use strum_macros::Display;
 
+#[derive(Serialize)]
 pub struct OrderKey {
     pub chain_id: u32,      // selling chain
     pub adapter_id: u32,    // selling adapter
@@ -15,15 +17,12 @@ pub struct OrderKey {
 
 impl OrderKey {
     pub fn serialize(&self) -> Vec<u8> {
-        [
-            array_to_vec(&self.chain_id.to_be_bytes()),
-            array_to_vec(&self.adapter_id.to_be_bytes()),
-            self.order_id.to_vec(),
-        ].concat()
+        bincode::options().with_big_endian().with_fixint_encoding().serialize(&self).unwrap()
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+//#[derive(Debug)]
 pub struct OrderListKey {
     pub sell_chain_id: u32,
     pub sell_asset_id: [u8; 8],
@@ -37,30 +36,15 @@ pub struct OrderListKey {
 
 impl OrderListKey {
     pub fn serialize(&self) -> Vec<u8> {
-        [
-            array_to_vec(&self.sell_chain_id.to_be_bytes()),
-            self.sell_asset_id.to_vec(),
-            array_to_vec(&self.buy_chain_id.to_be_bytes()),
-            self.buy_asset_id.to_vec(),
-            array_to_vec(&self.value.to_be_bytes()),
-            array_to_vec(&self.sell_adapter_id.to_be_bytes()),
-            self.order_id.to_vec(),
-        ].concat()
+        bincode::options().with_big_endian().with_fixint_encoding().serialize(&self).unwrap()
     }
 
     pub fn unserialize(vec: Vec<u8>) -> OrderListKey {
-        OrderListKey {
-            sell_chain_id: u32::from_be_bytes(vector_as_u8_4_array(&vec[0..4].to_vec())),
-            sell_asset_id: vector_as_u8_8_array(&vec[4..12].to_vec()),
-            buy_chain_id: u32::from_be_bytes(vector_as_u8_4_array(&vec[12..16].to_vec())),
-            buy_asset_id: vector_as_u8_8_array(&vec[16..24].to_vec()),
-            value: u128::from_be_bytes(vector_as_u8_16_array(&vec[24..40].to_vec())),
-            sell_adapter_id: u32::from_be_bytes(vector_as_u8_4_array(&vec[40..44].to_vec())),
-            order_id: vector_as_u8_16_array(&vec[44..60].to_vec()),
-        }
+        bincode::options().with_big_endian().with_fixint_encoding().deserialize(&vec).unwrap()
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct OrderLockListKey {
     pub chain_id: u32,      // selling chain
     pub adapter_id: u32,    // selling adapter
@@ -72,23 +56,11 @@ pub struct OrderLockListKey {
 
 impl OrderLockListKey {
     pub fn serialize(&self) -> Vec<u8> {
-        [
-            array_to_vec(&self.chain_id.to_be_bytes()),
-            array_to_vec(&self.adapter_id.to_be_bytes()),
-            self.order_id.to_vec(),
-            array_to_vec(&self.value.to_be_bytes()),
-            self.hashed_secret.to_vec(),
-        ].concat()
+        bincode::options().with_big_endian().with_fixint_encoding().serialize(&self).unwrap()
     }
 
     pub fn unserialize(vec: Vec<u8>) -> OrderLockListKey {
-        OrderLockListKey {
-            chain_id: u32::from_be_bytes(vector_as_u8_4_array(&vec[0..4].to_vec())),
-            adapter_id: u32::from_be_bytes(vector_as_u8_4_array(&vec[4..8].to_vec())),
-            order_id: vector_as_u8_16_array(&vec[8..24].to_vec()),
-            value: u128::from_be_bytes(vector_as_u8_16_array(&vec[24..40].to_vec())),
-            hashed_secret: vector_as_u8_32_array(&vec[40..72].to_vec()),
-        }
+        bincode::options().with_big_endian().with_fixint_encoding().deserialize(&vec).unwrap()
     }
 }
 
@@ -127,6 +99,7 @@ pub enum LockState {
     Invalid,
 }
 
+#[derive(Serialize)]
 pub struct LockKey {
     pub chain_id: u32,      // selling chain
     pub adapter_id: u32,    // selling adapter
@@ -135,11 +108,7 @@ pub struct LockKey {
 
 impl LockKey {
     pub fn serialize(&self) -> Vec<u8> {
-        [
-            array_to_vec(&self.chain_id.to_be_bytes()),
-            array_to_vec(&self.adapter_id.to_be_bytes()),
-            self.hashed_secret.to_vec(),
-        ].concat()
+        bincode::options().with_big_endian().with_fixint_encoding().serialize(&self).unwrap()
     }
 }
 
