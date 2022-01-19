@@ -23,7 +23,9 @@ async fn update_order(order_id: [u8; 16], db: Arc<DB>, new_value: Option<u128>) 
 
     match option {
         Some(result) => {
-            let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
+            let mut be_value: [u8; 16] = [0; 16];
+            be_value.clone_from_slice(&result[..16]);
+            let value = u128::from_be_bytes(be_value);
             println!("old value: {:?}", value);
             let key = OrderListKey {
                 sell_chain_id: 9001,
@@ -106,14 +108,17 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                         if event.topics[0] == add_to_order {
                             println!("AddToOrder: {:?}", hex::encode(&event.data.0));
-                            let order_id = vector_as_u8_16_array(&event.data.0);
-                            let seller = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            let mut order_id: [u8; 16] = [0; 16];
+                            order_id.clone_from_slice(&event.data.0[..16]);
+                            let mut seller: [u8; 32] = [0; 32];
+                            seller.clone_from_slice(&event.data.0[32..64]);
                             let chain_id = 76;
                             let adapter_id = 0;
                             let asset_id = <[u8; 8]>::default();
-                            let price = U128::from(vector_as_u8_16_array_offset(&event.data.0, 80)).as_u128();
-                            let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 96);
-                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
+                            let price = U128::from(&event.data.0[80..96]).as_u128();
+                            let mut foreign_address: [u8; 32] = [0; 32];
+                            foreign_address.clone_from_slice(&event.data.0[96..128]);
+                            let value = U128::from(&event.data.0[144..160]).as_u128();
                             println!("order_id: {:?}", hex::encode(&order_id));
                             println!("seller: {:?}", hex::encode(&seller));
                             println!("price: {:?}", price);
@@ -145,10 +150,12 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         if event.topics[0] == lock_sell {
                             println!("LockSell: {:?}", hex::encode(&event.data.0));
 //                            event LockSell(bytes16 orderId, bytes32 hashedSecret, uint256 timeout, uint256 value);
-                            let order_id = vector_as_u8_16_array(&event.data.0);
-                            let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 32);
-                            let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 80)).as_u128();
-                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
+                            let mut order_id: [u8; 16] = [0; 16];
+                            order_id.clone_from_slice(&event.data.0[..16]);
+                            let mut hashed_secret: [u8; 32] = [0; 32];
+                            hashed_secret.clone_from_slice(&event.data.0[32..64]);
+                            let timeout = U128::from(&event.data.0[80..96]).as_u128();
+                            let value = U128::from(&event.data.0[112..128]).as_u128();
                             println!("order_id: {:?}", hex::encode(&order_id));
                             println!("hashed_secret: {:?}", hex::encode(&hashed_secret));
                             println!("timeout: {:?}", timeout);
@@ -171,8 +178,10 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         if event.topics[0] == unlock_sell {
                             println!("UnlockSell: {:?}", hex::encode(&event.data.0));
 //                            event UnlockSell(bytes16 orderId, bytes32 secret, address buyer);
-                            let order_id = vector_as_u8_16_array(&event.data.0);
-                            let secret = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            let mut order_id: [u8; 16] = [0; 16];
+                            order_id.clone_from_slice(&event.data.0[..16]);
+                            let mut secret: [u8; 32] = [0; 32];
+                            secret.clone_from_slice(&event.data.0[32..64]);
                             println!("order_id: {:?}", hex::encode(&order_id));
                             println!("secret: {:?}", hex::encode(&secret));
 
@@ -210,15 +219,20 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
 
                         if event.topics[0] == lock_buy {
                             println!("LockBuy: {:?}", hex::encode(&event.data.0));
-                            let buyer = vector_as_u8_32_array(&event.data.0);
-                            let seller = vector_as_u8_20_array_offset(&event.data.0, 44);
-                            let hashed_secret = vector_as_u8_32_array_offset(&event.data.0, 64);
-                            let timeout = U128::from(vector_as_u8_16_array_offset(&event.data.0, 112)).as_u128();
-                            let value = U128::from(vector_as_u8_16_array_offset(&event.data.0, 144)).as_u128();
+                            let mut buyer: [u8; 32] = [0; 32];
+                            buyer.clone_from_slice(&event.data.0[..32]);
+                            let mut seller: [u8; 20] = [0; 20];
+                            seller.clone_from_slice(&event.data.0[44..64]);
+                            let mut hashed_secret: [u8; 32] = [0; 32];
+                            hashed_secret.clone_from_slice(&event.data.0[64..96]);
+                            let timeout = U128::from(&event.data.0[112..128]).as_u128();
+                            let value = U128::from(&event.data.0[144..160]).as_u128();
 //                            let chain_id = vector_as_u8_16_array_offset(&event.data.0, 19001);
 //                            let adapter_id = vector_as_u8_16_array_offset(&event.data.0, 19001);
-                            let order_id = vector_as_u8_16_array_offset(&event.data.0, 168);
-                            let foreign_address = vector_as_u8_32_array_offset(&event.data.0, 192);
+                            let mut order_id: [u8; 16] = [0; 16];
+                            order_id.clone_from_slice(&event.data.0[168..184]);
+                            let mut foreign_address: [u8; 32] = [0; 32];
+                            foreign_address.clone_from_slice(&event.data.0[192..224]);
                             println!("buyer: {:?}", hex::encode(&buyer));
                             println!("seller: {:?}", hex::encode(&seller));
                             println!("hashed_secret: {:?}", hex::encode(&hashed_secret));
@@ -262,8 +276,10 @@ pub async fn ethereum_listen(db: Arc<DB>, tx: Sender<RequestMessage>) {
                         }
                         if event.topics[0] == unlock_buy {
                             println!("UnlockBuy: {:?}", hex::encode(&event.data.0));
-                            let buyer = vector_as_u8_32_array(&event.data.0);
-                            let secret = vector_as_u8_32_array_offset(&event.data.0, 32);
+                            let mut buyer: [u8; 32] = [0; 32];
+                            buyer.clone_from_slice(&event.data.0[..32]);
+                            let mut secret: [u8; 32] = [0; 32];
+                            secret.clone_from_slice(&event.data.0[32..64]);
                             println!("buyer: {:?}", hex::encode(&buyer));
                             println!("secret: {:?}", hex::encode(&secret));
 

@@ -63,11 +63,15 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
     match msg {
         RequestMessage::GetOrderBook { sell_chain_id, sell_asset_id, buy_chain_id, buy_asset_id } => {
             println!("getOrderBook");
+            let mut sell_asset_id_array: [u8; 8] = [0; 8];
+            sell_asset_id_array.clone_from_slice(&hex::decode(sell_asset_id.clone()).unwrap()[..8]);
+            let mut buy_asset_id_array: [u8; 8] = [0; 8];
+            buy_asset_id_array.clone_from_slice(&hex::decode(buy_asset_id.clone()).unwrap()[..8]);
             let start_key = OrderListKey {
                 sell_chain_id: sell_chain_id,
-                sell_asset_id: vector_as_u8_8_array(&hex::decode(sell_asset_id.clone()).unwrap()),
+                sell_asset_id: sell_asset_id_array,
                 buy_chain_id: buy_chain_id,
-                buy_asset_id: vector_as_u8_8_array(&hex::decode(buy_asset_id.clone()).unwrap()),
+                buy_asset_id: buy_asset_id_array,
                 value: u128::default(),
                 sell_adapter_id: u32::default(),
                 order_id: <[u8; 16]>::default(),
@@ -77,11 +81,11 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
             let order_list_keys = iterator.collect::<Vec<_>>();
             let mut orderbook: Vec<JsonOrder> = Vec::new();
             for order_list_key in order_list_keys {
-                println!("{:?}", order_list_key);
+                println!("Serialized order_list_key: {:?}", order_list_key);
                 let order_list_key = OrderListKey::unserialize(order_list_key.0.to_vec());
                 if order_list_key.sell_chain_id != sell_chain_id { break };
 
-                println!("{:?}", order_list_key);
+                println!("Deserialized order_list_key: {:?}", order_list_key);
 
                 let order_key = OrderKey {
                     chain_id: order_list_key.sell_chain_id,
@@ -90,7 +94,7 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                 };
 
                 let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize()).unwrap().unwrap()).unwrap();
-                println!("{:?}", order_static);
+                println!("Deserialized order_static: {:?}", order_static);
 
                 orderbook.push(JsonOrder {
                     order_id: hex::encode(order_list_key.order_id),
@@ -116,7 +120,9 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
         RequestMessage::GetOrder { sell_chain_id, sell_adapter_id, order_id } => {
             println!("getOrder");
 
-            let order_id: [u8; 16] = vector_as_u8_16_array(&hex::decode(order_id).unwrap());
+            let mut order_id_array: [u8; 16] = [0; 16];
+            order_id_array.clone_from_slice(&hex::decode(order_id.clone()).unwrap()[..16]);
+            let order_id = order_id_array;
             let order_key = OrderKey {
                 chain_id: sell_chain_id,
                 adapter_id: sell_adapter_id,
@@ -127,7 +133,9 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
 
             match option {
                 Some(result) => {
-                    let value = u128::from_be_bytes(vector_as_u8_16_array(&result));
+                    let mut value_array: [u8; 16] = [0; 16];
+                    value_array.clone_from_slice(&result[0..16]);
+                    let value = u128::from_be_bytes(value_array);
                     println!("value: {:?}", value);
 
                     let order_static: OrderStatic = bincode::deserialize(&db.get_cf(&db.cf_handle("order_static").unwrap(), order_key.serialize()).unwrap().unwrap()).unwrap();
@@ -205,7 +213,10 @@ async fn process_msg(db: &Arc<DB>, msg: RequestMessage) -> String {
                     };
                     serde_json::to_string(&response).unwrap()
                 },
-                None => "".to_string(),
+                None => {
+                    println!("Database miss.");
+                    "".to_string()
+                },
             }
         },
     }
